@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net481</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <OutputType>Library</OutputType>
+    <AssemblyName>ShipOSClientPlugin</AssemblyName>
+    <RootNamespace>ShipOSClientPlugin</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <DefaultSteamBin64>$(MSBuildProgramFiles32)\Steam\steamapps\common\SpaceEngineers\Bin64</DefaultSteamBin64>
+    <DSteamBin64>D:\SteamLibrary\steamapps\common\SpaceEngineers\Bin64</DSteamBin64>
+    <SpaceEngineersBin64 Condition="'$(SpaceEngineersBin64)' == '' And Exists('$(DefaultSteamBin64)\Sandbox.Common.dll')">$(DefaultSteamBin64)</SpaceEngineersBin64>
+    <SpaceEngineersBin64 Condition="'$(SpaceEngineersBin64)' == '' And Exists('$(DSteamBin64)\Sandbox.Common.dll')">$(DSteamBin64)</SpaceEngineersBin64>
+    <SpaceEngineersBin64 Condition="'$(SpaceEngineersBin64)' == ''">$(DefaultSteamBin64)</SpaceEngineersBin64>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Sandbox.Common">
+      <HintPath>$(SpaceEngineersBin64)\Sandbox.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Sandbox.Game">
+      <HintPath>$(SpaceEngineersBin64)\Sandbox.Game.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SpaceEngineers.Game">
+      <HintPath>$(SpaceEngineersBin64)\SpaceEngineers.Game.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VRage">
+      <HintPath>$(SpaceEngineersBin64)\VRage.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VRage.Game">
+      <HintPath>$(SpaceEngineersBin64)\VRage.Game.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VRage.Library">
+      <HintPath>$(SpaceEngineersBin64)\VRage.Library.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="VRage.Math">
+      <HintPath>$(SpaceEngineersBin64)\VRage.Math.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
+</Project>

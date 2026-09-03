@@ -1,0 +1,5 @@
+Endpoint=http://127.0.0.1:8795/telemetry
+ShipName=DSV Intrepid
+IntervalSeconds=2
+ContactRangeMeters=250000
+MaxContacts=80
