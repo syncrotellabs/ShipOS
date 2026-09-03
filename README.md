@@ -26,6 +26,10 @@ pnpm build
 pnpm dev
 ```
 
+`pnpm dev` listens on the private network as well as localhost. Start the telemetry helper, right-click its helmet icon in the Windows system tray, and choose **Show iPad QR code...** to open the local pairing card. The iPad must be on the same Wi-Fi or Ethernet network as the Space Engineers PC.
+
+The browser-facing telemetry path is `/shipos-bridge/telemetry/latest`. The local ShipOS server proxies it to the bridge on `127.0.0.1:8795`, so the bridge does not need to expose its write endpoints directly to the LAN.
+
 The optional API proxy defaults to `http://localhost:5010`. Override it with `VITE_SHIPOS_API_URL`.
 
 ## Source provenance

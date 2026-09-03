@@ -18,6 +18,8 @@ ShipOS supports four telemetry lanes:
 
      ```text
      Open ShipOS
+     Show iPad QR code...
+     Copy iPad link
      Open local bridge health
      Health check
      Latest packet
@@ -29,6 +31,8 @@ ShipOS supports four telemetry lanes:
      Stop bridge
      Install desktop shortcut
      ```
+
+   - **Show iPad QR code...** opens a pairing card for the current private-network address. Scan it with an iPad on the same network to open the live map. The ShipOS web server proxies read-only browser requests to the loopback bridge; the bridge remains bound to `127.0.0.1` by default.
 
    - `install-shipos-helper-shortcut.cmd` creates a desktop shortcut named `ShipOS Telemetry Helper`. The shortcut starts the tray helper silently and uses the same helmet icon.
 

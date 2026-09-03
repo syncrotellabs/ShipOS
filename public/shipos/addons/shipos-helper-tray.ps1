@@ -12,7 +12,7 @@ Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName Microsoft.VisualBasic
 
 $appName = "ShipOS Telemetry Helper"
-$helperVersion = "2026.08.18.2"
+$helperVersion = "2026.09.03.1"
 $installRoot = Join-Path $env:LOCALAPPDATA "ShipOS\Helper"
 $installedScript = Join-Path $installRoot "shipos-helper-tray.ps1"
 $bridgeScript = Join-Path $installRoot "shipos-telemetry-bridge.mjs"
@@ -21,12 +21,14 @@ $logPath = Join-Path $installRoot "shipos-telemetry-log.jsonl"
 $configPath = Join-Path $installRoot "shipos-helper.json"
 $localEndpoint = "http://127.0.0.1:8795/telemetry/latest"
 $healthEndpoint = "http://127.0.0.1:8795/health"
+$localShipOsUrl = "http://127.0.0.1:5174/"
 $relayEndpoint = "https://gaming.echoboardhq.com/api/shipos/telemetry/latest"
 $remotePushEndpoint = "https://gaming.echoboardhq.com/api/shipos/telemetry"
 $sourceBridgeUrl = "https://gaming.echoboardhq.com/shipos/addons/shipos-telemetry-bridge.mjs"
 $script:BridgeProcess = $null
 $script:NotifyIcon = $null
 $script:RelayStatusMenuItem = $null
+$script:IpadStatusMenuItem = $null
 $script:ShouldRunBridge = -not $NoStart
 $script:LastStatus = "Starting"
 $script:RelayKey = ""
@@ -221,6 +223,49 @@ function Test-LocalBridgeOnline {
     }
 }
 
+function Get-IpadShipOsUrl {
+    try {
+        $health = Invoke-RestMethod -Uri $healthEndpoint -TimeoutSec 3
+        $lanEndpoint = @($health.lanTelemetryEndpoints | Where-Object { $_ }) | Select-Object -First 1
+        if (-not $lanEndpoint) { return $null }
+        $lanUri = [Uri][string]$lanEndpoint
+        return "http://$($lanUri.Host):5174/"
+    }
+    catch {
+        return $null
+    }
+}
+
+function Update-IpadMenuStatus {
+    if (-not $script:IpadStatusMenuItem) { return }
+    $ipadUrl = Get-IpadShipOsUrl
+    $script:IpadStatusMenuItem.Text = if ($ipadUrl) {
+        "iPad link: $ipadUrl"
+    }
+    else {
+        "iPad link: waiting for private network"
+    }
+}
+
+function Show-IpadQrCode {
+    $ipadUrl = Get-IpadShipOsUrl
+    if (-not $ipadUrl) {
+        Show-HelperBalloon "No private-network address is available yet. Connect this PC to Wi-Fi or Ethernet and try again." ([System.Windows.Forms.ToolTipIcon]::Warning)
+        return
+    }
+    Open-Uri ($localShipOsUrl + "?share=ipad")
+    Show-HelperBalloon "Scan the code to open $ipadUrl on an iPad connected to the same network."
+}
+
+function Copy-IpadShipOsUrl {
+    $ipadUrl = Get-IpadShipOsUrl
+    if (-not $ipadUrl) {
+        Show-HelperBalloon "No private-network address is available yet." ([System.Windows.Forms.ToolTipIcon]::Warning)
+        return
+    }
+    Copy-Text $ipadUrl
+}
+
 function Get-NodePath {
     $node = Get-Command node.exe -ErrorAction SilentlyContinue
     if ($node) { return $node.Source }
@@ -377,7 +422,14 @@ function Start-TrayApp {
     Ensure-HelmetIcon
 
     $contextMenu = New-Object System.Windows.Forms.ContextMenuStrip
-    [void]$contextMenu.Items.Add((New-MenuItem "Open ShipOS" { Open-Uri "https://gaming.echoboardhq.com/shipos" }))
+    [void]$contextMenu.Items.Add((New-MenuItem "Open ShipOS" { Open-Uri $localShipOsUrl }))
+    [void]$contextMenu.Items.Add((New-MenuItem "Show iPad QR code..." { Show-IpadQrCode }))
+    [void]$contextMenu.Items.Add((New-MenuItem "Copy iPad link" { Copy-IpadShipOsUrl }))
+    $script:IpadStatusMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem
+    $script:IpadStatusMenuItem.Text = "iPad link: checking"
+    $script:IpadStatusMenuItem.Enabled = $false
+    [void]$contextMenu.Items.Add($script:IpadStatusMenuItem)
+    [void]$contextMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
     $script:RelayStatusMenuItem = New-Object System.Windows.Forms.ToolStripMenuItem
     $script:RelayStatusMenuItem.Text = "EchoBoard relay: checking"
     $script:RelayStatusMenuItem.Enabled = $false
@@ -413,11 +465,12 @@ function Start-TrayApp {
     $script:NotifyIcon.Icon = New-Object System.Drawing.Icon $iconPath
     $script:NotifyIcon.ContextMenuStrip = $contextMenu
     $script:NotifyIcon.Visible = $true
-    $script:NotifyIcon.Add_DoubleClick({ Open-Uri "https://gaming.echoboardhq.com/shipos" })
+    $script:NotifyIcon.Add_DoubleClick({ Open-Uri $localShipOsUrl })
 
     Set-HelperStatus "Loading"
     Load-HelperConfig
     Start-Bridge
+    Update-IpadMenuStatus
 
     $timer = New-Object System.Windows.Forms.Timer
     $timer.Interval = 10000
@@ -432,6 +485,7 @@ function Start-TrayApp {
                 Set-HelperStatus "Bridge online"
             }
         }
+        Update-IpadMenuStatus
     })
     $timer.Start()
 

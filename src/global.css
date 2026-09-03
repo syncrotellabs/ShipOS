@@ -25,3 +25,134 @@ textarea {
   font: inherit;
 }
 
+.shipOsShareBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(1 7 10 / 88%);
+  backdrop-filter: blur(12px);
+}
+
+.shipOsSharePanel {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: min(480px, 100%);
+  padding: 34px;
+  overflow: hidden;
+  color: #dffef6;
+  text-align: center;
+  background:
+    linear-gradient(145deg, rgb(13 40 47 / 98%), rgb(4 17 22 / 98%));
+  border: 1px solid rgb(125 232 210 / 55%);
+  border-radius: 18px;
+  box-shadow: 0 28px 90px rgb(0 0 0 / 65%), inset 0 0 40px rgb(99 215 255 / 6%);
+}
+
+.shipOsSharePanel::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(90deg, transparent, rgb(125 232 210 / 8%), transparent);
+  transform: translateX(-100%);
+  animation: shipOsShareScan 4s linear infinite;
+}
+
+.shipOsSharePanel h2 {
+  margin: 7px 0 8px;
+  color: #fff;
+  font-size: clamp(24px, 5vw, 34px);
+  letter-spacing: .02em;
+}
+
+.shipOsSharePanel p {
+  max-width: 380px;
+  margin: 0 0 20px;
+  color: #a9c8c5;
+  line-height: 1.55;
+}
+
+.shipOsSharePanel small {
+  margin-top: 18px;
+  color: #7e9e9c;
+  line-height: 1.45;
+}
+
+.shipOsShareEyebrow {
+  color: #7de8d2;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.shipOsShareQr {
+  display: block;
+  width: min(320px, 84vw);
+  height: auto;
+  padding: 8px;
+  background: #f2fffc;
+  border: 1px solid #7de8d2;
+  border-radius: 12px;
+  box-shadow: 0 0 38px rgb(125 232 210 / 18%);
+}
+
+.shipOsShareUrl {
+  display: block;
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px 12px;
+  overflow-wrap: anywhere;
+  color: #f5bf53;
+  background: rgb(0 0 0 / 30%);
+  border: 1px solid rgb(245 191 83 / 28%);
+  border-radius: 8px;
+}
+
+.shipOsSharePending,
+.shipOsShareError {
+  width: 100%;
+  padding: 18px;
+  border-radius: 10px;
+}
+
+.shipOsSharePending {
+  color: #7de8d2;
+  border: 1px dashed rgb(125 232 210 / 35%);
+}
+
+.shipOsShareError {
+  color: #ffd2cd;
+  background: rgb(95 21 17 / 45%);
+  border: 1px solid rgb(255 107 97 / 45%);
+}
+
+.shipOsShareClose {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: #9fc2bd;
+  font-size: 25px;
+  line-height: 1;
+  cursor: pointer;
+  background: rgb(0 0 0 / 22%);
+  border: 1px solid rgb(125 232 210 / 22%);
+  border-radius: 50%;
+}
+
+.shipOsShareClose:hover {
+  color: #fff;
+  border-color: #7de8d2;
+}
+
+@keyframes shipOsShareScan {
+  to { transform: translateX(100%); }
+}

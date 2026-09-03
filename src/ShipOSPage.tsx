@@ -1330,11 +1330,11 @@ const contactEnvelopeRingsMeters = [4000]
 const masterAlarmAltitudeCautionMeters = 1000
 const masterAlarmCautionDurationMs = 5000
 const orbitLineSegments = 160
-const defaultBridgeEndpoint = 'http://127.0.0.1:8795/telemetry/latest'
+const defaultBridgeEndpoint = '/shipos-bridge/telemetry/latest'
 const cloudBridgeEndpoint = '/api/shipos/telemetry/latest'
 const cloudBridgeHealthEndpoint = '/api/shipos/telemetry/health'
 const fallbackBridgeEndpoints = [
-  defaultBridgeEndpoint,
+  'http://127.0.0.1:8795/telemetry/latest',
   'http://localhost:8795/telemetry/latest',
 ]
 const telemetryHistoryLimit = 240
@@ -2704,6 +2704,7 @@ function normalizeBridgePollSeconds(value?: number) {
 
 function bridgeHealthEndpoint(endpoint: string) {
   if (endpoint.startsWith('/api/shipos/telemetry')) return cloudBridgeHealthEndpoint
+  if (endpoint.startsWith('/shipos-bridge/')) return '/shipos-bridge/health'
   try {
     const url = new URL(endpoint)
     url.pathname = '/health'
@@ -2717,6 +2718,7 @@ function bridgeHealthEndpoint(endpoint: string) {
 
 function bridgeTelemetryEndpointFromHealth(endpoint: string) {
   if (endpoint.startsWith('/api/shipos/telemetry')) return cloudBridgeEndpoint
+  if (endpoint.startsWith('/shipos-bridge/')) return defaultBridgeEndpoint
   try {
     const url = new URL(endpoint)
     url.pathname = '/telemetry/latest'
