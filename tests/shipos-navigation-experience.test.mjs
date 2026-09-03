@@ -11,4 +11,8 @@ test('standalone ShipOS opens in the free navigation experience', async () => {
   assert.match(page, /isNavigationExperience \? 'ShipOS Navigation'/)
   assert.match(page, /!isNavigationExperience && renderTab\(\)/)
   assert.match(page, /isNavigationExperience \? 'Return to vessel'/)
+  assert.match(page, /status: 'Connecting to local telemetry'/)
+  assert.match(page, /autoPoll: true/)
+  assert.match(page, /if \(!isNavigationExperience \|\| bridgeConfig\.autoPoll\) return/)
+  assert.match(page, /void pollTelemetryBridgeRef\.current\(\{ silent: true \}\)/)
 })

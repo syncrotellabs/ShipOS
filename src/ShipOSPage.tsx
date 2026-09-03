@@ -2926,8 +2926,8 @@ function createDefaultNavigationPlan(): NavigationPlanDraft {
 function createDefaultBridgeConfig(): BridgeConfig {
   return {
     endpoint: defaultBridgeEndpoint,
-    status: 'Manual import mode',
-    autoPoll: false,
+    status: 'Connecting to local telemetry',
+    autoPoll: true,
     pollSeconds: 5,
     consecutiveFailures: 0,
   }
@@ -7283,7 +7283,17 @@ export function ShipOSPage({
   pollTelemetryBridgeRef.current = pollTelemetryBridge
 
   useEffect(() => {
+    if (!isNavigationExperience || bridgeConfig.autoPoll) return
+    setBridgeConfig((current) => ({
+      ...current,
+      autoPoll: true,
+      status: 'Connecting to local telemetry',
+    }))
+  }, [isNavigationExperience, bridgeConfig.autoPoll, setBridgeConfig])
+
+  useEffect(() => {
     if (!bridgeConfig.autoPoll) return
+    void pollTelemetryBridgeRef.current({ silent: true })
     const timer = window.setInterval(() => {
       void pollTelemetryBridgeRef.current({ silent: true })
     }, bridgePollSeconds * 1000)
