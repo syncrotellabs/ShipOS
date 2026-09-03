@@ -1,5 +1,7 @@
 # ShipOS
 
+> A Space Engineers thing. You wouldnt understand.
+
 Standalone development repository for ShipOS, extracted from EchoBoard Gaming for an independent free release.
 
 This repository currently preserves the complete ShipOS feature set while the first map-focused release is separated from the campaign-console features. ShipOS is free and open source under the MIT License.
