@@ -17,7 +17,10 @@ namespace ShipOSLocalTelemetry
     public class ShipOSLocalTelemetrySession : MySessionComponentBase
     {
         private const string OutputFileName = "ShipOSLocalTelemetry.latest.json";
-        private const string ModVersion = "2026.08.21.2";
+        private const string ModVersion = "2026.09.04.1";
+        private const string FleetTag = "[ShipOS]";
+        private const int MaxFleetGrids = 128;
+        private const string WorldIdentityFile = "ShipOS.world-id.txt";
         private const int TickInterval = 120;
         private const int ContactScanPacketInterval = 5;
         private const double ContactRangeMeters = 250000.0;
@@ -31,8 +34,10 @@ namespace ShipOSLocalTelemetry
         private int _sequence;
         private bool _announced;
         private readonly string _sessionId = Guid.NewGuid().ToString("N");
+        private string _worldId;
         private string _cachedContactsJson = "[]";
         private readonly List<IHitInfo> _terrainHits = new List<IHitInfo>(12);
+        private readonly HashSet<IMyEntity> _fleetCandidates = new HashSet<IMyEntity>();
 
         public override void UpdateAfterSimulation()
         {
@@ -45,6 +50,7 @@ namespace ShipOSLocalTelemetry
         private void WriteTelemetryPacket()
         {
             if (MyAPIGateway.Session == null || MyAPIGateway.Utilities == null) return;
+            if (_worldId == null) _worldId = ReadOrCreateWorldIdentity();
 
             IMyEntity controlled = GetControlledEntity();
             if (controlled == null) return;
@@ -61,9 +67,12 @@ namespace ShipOSLocalTelemetry
             packet.Append('{');
             AppendString(packet, "source", "local-mod", false);
             AppendString(packet, "modVersion", ModVersion, true);
-            AppendString(packet, "ship", SafeName(subject, "DSV Intrepid"), true);
+            AppendString(packet, "ship", SafeName(subject, "Engineer"), true);
             AppendString(packet, "grid", SafeName(subject, "Controlled Entity"), true);
             AppendString(packet, "sessionId", _sessionId, true);
+            AppendString(packet, "worldId", _worldId, true);
+            AppendString(packet, "worldName", MyAPIGateway.Session.Name ?? "Star System", true);
+            AppendString(packet, "controlMode", controlled is Sandbox.ModAPI.IMyShipController ? "cockpit" : "character", true);
             AppendString(packet, "packetId", "shipos-local-" + _sessionId + "-" + _sequence.ToString(CultureInfo.InvariantCulture), true);
             AppendNumber(packet, "sequence", _sequence, true);
             AppendString(packet, "stamp", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture), true);
@@ -76,7 +85,10 @@ namespace ShipOSLocalTelemetry
             AppendNumber(packet, "speed", speed, true);
             Sandbox.ModAPI.IMyShipController controller = controlled as Sandbox.ModAPI.IMyShipController;
             AppendFlightTelemetry(packet, controller, velocity);
+            if (controller == null) AppendCharacterTelemetry(packet, controlled, position, velocity);
             AppendTerrainScan(packet, controller, position);
+            if (subject is IMyCubeGrid) AppendGridSystems(packet, (IMyCubeGrid)subject);
+            AppendFleetTelemetry(packet, position);
             packet.Append(",\"contacts\":");
             if (_sequence == 1 || _sequence % ContactScanPacketInterval == 0)
             {
@@ -96,6 +108,148 @@ namespace ShipOSLocalTelemetry
             {
                 _announced = true;
                 MyAPIGateway.Utilities.ShowMessage("ShipOS", "Local telemetry writing to Storage\\" + OutputFileName);
+            }
+        }
+
+        private static string ReadOrCreateWorldIdentity()
+        {
+            // World storage is saved with the world, unlike the per-launch session identifier.
+            if (MyAPIGateway.Utilities.FileExistsInWorldStorage(WorldIdentityFile, typeof(ShipOSLocalTelemetrySession)))
+            {
+                using (TextReader reader = MyAPIGateway.Utilities.ReadFileInWorldStorage(WorldIdentityFile, typeof(ShipOSLocalTelemetrySession)))
+                {
+                    Guid parsed;
+                    if (Guid.TryParse(reader.ReadToEnd().Trim(), out parsed)) return parsed.ToString("N");
+                }
+            }
+            string id = Guid.NewGuid().ToString("N");
+            using (TextWriter writer = MyAPIGateway.Utilities.WriteFileInWorldStorage(WorldIdentityFile, typeof(ShipOSLocalTelemetrySession))) writer.Write(id);
+            return id;
+        }
+
+        private static void AppendCharacterTelemetry(StringBuilder packet, IMyEntity controlled, Vector3D position, Vector3D velocity)
+        {
+            if (MyAPIGateway.Physics == null) return;
+            float interference;
+            Vector3D gravity = MyAPIGateway.Physics.CalculateNaturalGravityAt(position, out interference);
+            MatrixD orientation = controlled.WorldMatrix;
+            AppendNumber(packet, "naturalGravity", gravity.Length() / 9.81, true);
+            AppendNumber(packet, "gravityX", gravity.X, true);
+            AppendNumber(packet, "gravityY", gravity.Y, true);
+            AppendNumber(packet, "gravityZ", gravity.Z, true);
+            AppendNumber(packet, "forwardX", orientation.Forward.X, true);
+            AppendNumber(packet, "forwardY", orientation.Forward.Y, true);
+            AppendNumber(packet, "forwardZ", orientation.Forward.Z, true);
+            AppendNumber(packet, "upX", orientation.Up.X, true);
+            AppendNumber(packet, "upY", orientation.Up.Y, true);
+            AppendNumber(packet, "upZ", orientation.Up.Z, true);
+            if (gravity.LengthSquared() < 0.0001) return;
+            Vector3D radialUp = Vector3D.Normalize(-gravity);
+            double vertical = Vector3D.Dot(velocity, radialUp);
+            AppendNumber(packet, "verticalSpeed", vertical, true);
+            AppendNumber(packet, "horizontalSpeed", Math.Sqrt(Math.Max(0, velocity.LengthSquared() - vertical * vertical)), true);
+            MyPlanet planet = MyGamePruningStructure.GetClosestPlanet(position);
+            if (planet == null) return;
+            Vector3D center = planet.PositionComp.GetPosition();
+            Vector3D surface = planet.GetClosestSurfacePointGlobal(ref position);
+            AppendNumber(packet, "surfaceAltitude", Vector3D.Dot(position - surface, radialUp), true);
+            AppendNumber(packet, "seaLevelAltitude", Vector3D.Distance(position, center) - planet.AverageRadius, true);
+            AppendNumber(packet, "planetCenterX", center.X, true);
+            AppendNumber(packet, "planetCenterY", center.Y, true);
+            AppendNumber(packet, "planetCenterZ", center.Z, true);
+            AppendString(packet, "terrainScanStatus", controlled is IMyCubeGrid ? "not-sampled-for-fleet" : "not-available-on-foot", true);
+        }
+
+        private void AppendFleetTelemetry(StringBuilder packet, Vector3D origin)
+        {
+            // Discover loaded grids every ten seconds; re-check tag and ownership on EVERY packet.
+            if (_sequence == 1 || _sequence % ContactScanPacketInterval == 0)
+            {
+                _fleetCandidates.Clear();
+                if (MyAPIGateway.Entities != null)
+                    MyAPIGateway.Entities.GetEntities(_fleetCandidates, entity => entity is IMyCubeGrid);
+            }
+            List<IMyCubeGrid> eligible = new List<IMyCubeGrid>();
+            foreach (IMyEntity entity in _fleetCandidates)
+            {
+                IMyCubeGrid grid = entity as IMyCubeGrid;
+                if (grid == null || grid.Closed || grid.MarkedForClose) continue;
+                if (string.IsNullOrEmpty(grid.CustomName) || grid.CustomName.IndexOf(FleetTag, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                string relationship = GridRelationship(grid);
+                if (relationship != "owned" && relationship != "friendly") continue;
+                eligible.Add(grid);
+            }
+            eligible.Sort((a, b) => {
+                int distance = Vector3D.DistanceSquared(a.GetPosition(), origin).CompareTo(Vector3D.DistanceSquared(b.GetPosition(), origin));
+                return distance != 0 ? distance : a.EntityId.CompareTo(b.EntityId);
+            });
+            AppendString(packet, "fleetTag", FleetTag, true);
+            AppendNumber(packet, "fleetEligibleCount", eligible.Count, true);
+            packet.Append(",\"fleet\":[");
+            for (int i = 0; i < eligible.Count && i < MaxFleetGrids; i++)
+            {
+                IMyCubeGrid grid = eligible[i];
+                Vector3D position = grid.GetPosition();
+                Vector3D velocity = ContactVelocity(grid, grid);
+                if (i > 0) packet.Append(',');
+                packet.Append('{');
+                AppendString(packet, "id", "se-" + grid.EntityId.ToString(CultureInfo.InvariantCulture), false);
+                AppendString(packet, "name", grid.CustomName, true);
+                AppendString(packet, "ship", grid.CustomName, true);
+                AppendString(packet, "grid", grid.CustomName, true);
+                AppendString(packet, "tag", FleetTag, true);
+                AppendString(packet, "relationship", GridRelationship(grid), true);
+                AppendString(packet, "kind", grid.IsStatic ? "station" : "ship", true);
+                AppendString(packet, "controlMode", grid.IsStatic ? "station" : "grid", true);
+                AppendNumber(packet, "x", position.X, true);
+                AppendNumber(packet, "y", position.Y, true);
+                AppendNumber(packet, "z", position.Z, true);
+                AppendNumber(packet, "velocityX", velocity.X, true);
+                AppendNumber(packet, "velocityY", velocity.Y, true);
+                AppendNumber(packet, "velocityZ", velocity.Z, true);
+                AppendNumber(packet, "speed", velocity.Length(), true);
+                // Grid orientation/position, not an arbitrary cockpit or the player's readings.
+                AppendCharacterTelemetry(packet, grid, position, velocity);
+                AppendGridSystems(packet, grid);
+                packet.Append('}');
+            }
+            packet.Append(']');
+        }
+
+        private static void AppendGridSystems(StringBuilder packet, IMyCubeGrid grid)
+        {
+            List<IMySlimBlock> blocks = new List<IMySlimBlock>();
+            grid.GetBlocks(blocks, block => block != null && block.FatBlock is IMyTerminalBlock);
+            double stored = 0, capacity = 0, cargo = 0, cargoCapacity = 0;
+            int batteries = 0, cargoContainers = 0, damaged = 0, offline = 0;
+            foreach (IMySlimBlock slim in blocks)
+            {
+                IMyTerminalBlock block = (IMyTerminalBlock)slim.FatBlock;
+                if (!block.IsFunctional) damaged++;
+                if (!block.IsWorking) offline++;
+                IMyBatteryBlock battery = block as IMyBatteryBlock;
+                if (battery != null) { batteries++; stored += battery.CurrentStoredPower; capacity += battery.MaxStoredPower; }
+                // Cargo means cargo-container inventories, not reactor fuel or production queues.
+                IMyCargoContainer container = block as IMyCargoContainer;
+                if (container != null && container.HasInventory)
+                {
+                    cargoContainers++;
+                    IMyInventory inventory = container.GetInventory();
+                    cargo += (double)inventory.CurrentVolume;
+                    cargoCapacity += (double)inventory.MaxVolume;
+                }
+            }
+            AppendNumber(packet, "terminalBlockCount", blocks.Count, true);
+            AppendNumber(packet, "nonFunctionalBlockCount", damaged, true);
+            AppendNumber(packet, "notWorkingBlockCount", offline, true);
+            AppendNumber(packet, "batteryCount", batteries, true);
+            if (capacity > 0) AppendNumber(packet, "batteryPercent", 100.0 * stored / capacity, true);
+            AppendNumber(packet, "inventoryCount", cargoContainers, true);
+            if (cargoCapacity > 0)
+            {
+                AppendNumber(packet, "cargoPercent", 100.0 * cargo / cargoCapacity, true);
+                AppendNumber(packet, "cargoCurrentVolume", cargo, true);
+                AppendNumber(packet, "cargoMaxVolume", cargoCapacity, true);
             }
         }
 
@@ -436,10 +590,6 @@ namespace ShipOSLocalTelemetry
 
         private static string GridRelationship(IMyCubeGrid grid)
         {
-            string name = SafeName(grid, string.Empty).ToLowerInvariant();
-            if (name.Contains("pirate") || name.Contains("hostile") || name.Contains("enemy") || name.Contains("raider")) return "hostile";
-
-            long ownerId = FirstOwnerId(grid);
             long playerId = 0;
             try
             {
@@ -450,18 +600,20 @@ namespace ShipOSLocalTelemetry
                 playerId = 0;
             }
 
-            if (ownerId != 0 && playerId != 0 && ownerId == playerId) return "owned";
-            string factionRelation = FactionRelationship(ownerId, playerId);
-            if (factionRelation.Length > 0) return factionRelation;
-            return "neutral";
-        }
-
-        private static long FirstOwnerId(IMyCubeGrid grid)
-        {
-            if (grid == null) return 0;
-            if (grid.BigOwners != null && grid.BigOwners.Count > 0) return grid.BigOwners[0];
-            if (grid.SmallOwners != null && grid.SmallOwners.Count > 0) return grid.SmallOwners[0];
-            return 0;
+            if (grid == null || playerId == 0) return "unknown";
+            var owners = grid.BigOwners != null && grid.BigOwners.Count > 0 ? grid.BigOwners : grid.SmallOwners;
+            if (owners == null || owners.Count == 0) return "neutral";
+            bool allOwned = true;
+            bool allFriendly = true;
+            foreach (long ownerId in owners)
+            {
+                if (ownerId == playerId) continue;
+                allOwned = false;
+                string relation = FactionRelationship(ownerId, playerId);
+                if (relation == "hostile") return "hostile";
+                if (relation != "friendly") allFriendly = false;
+            }
+            return allOwned ? "owned" : allFriendly ? "friendly" : "neutral";
         }
 
         private static string FactionRelationship(long ownerId, long playerId)

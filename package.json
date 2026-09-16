@@ -1,13 +1,16 @@
 {
   "name": "shipos",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0-beta.4",
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@11.19.0",
+  "engines": { "node": ">=24 <25" },
   "scripts": {
+    "start": "node runtime/server.mjs",
+    "schema": "node scripts/generate-state-schema.mjs",
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/generate-state-schema.mjs && tsc -b && vite build",
     "typecheck": "tsc -b",
     "test": "node --test tests/*.test.mjs",
     "preview": "vite preview"

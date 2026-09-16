@@ -1,4 +1,4 @@
-# ShipOS Client Plugin
+# Archived ShipOS Client Plugin (not part of the local beta)
 
 Native Space Engineers client plugin source for sending local single-player/client telemetry into the ShipOS bridge.
 

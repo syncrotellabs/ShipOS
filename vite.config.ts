@@ -1,30 +1,22 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const localTelemetryProxy = {
-  target: 'http://127.0.0.1:8795',
-  changeOrigin: true,
-  rewrite: (path: string) => path.replace(/^\/shipos-bridge/, ''),
-}
-
+// Development is loopback-only. Users run the bundled runtime, never a Vite LAN server.
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0',
-    port: 5174,
+    host: '127.0.0.1', port: 5173, strictPort: true,
     proxy: {
-      '/shipos-bridge': localTelemetryProxy,
       '/api': {
-        target: process.env.VITE_SHIPOS_API_URL ?? 'http://localhost:5010',
-        changeOrigin: true,
+        target: 'http://127.0.0.1:5174', changeOrigin: true,
+        configure(proxy) {
+          proxy.on('proxyReq', request => {
+            // This proxy is a local development client, never a tablet access boundary.
+            request.setHeader('Origin', 'http://127.0.0.1:5174')
+          })
+        },
       },
     },
   },
-  preview: {
-    host: '0.0.0.0',
-    port: 5174,
-    proxy: {
-      '/shipos-bridge': localTelemetryProxy,
-    },
-  },
+  preview: { host: '127.0.0.1', port: 5173, strictPort: true },
 })

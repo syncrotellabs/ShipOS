@@ -2,20 +2,16 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-test('ShipOS hydrates remote campaign state without reloading the console', async () => {
-  const source = await readFile(new URL('../src/ShipOSPage.tsx', import.meta.url), 'utf8')
-  const hydrateStart = source.indexOf('const hydrate = async () =>')
-  const hydrateEnd = source.indexOf('telemetryHistoryRef.current = telemetryHistory', hydrateStart)
-  const hydrateSource = source.slice(hydrateStart, hydrateEnd)
-
-  assert.ok(hydrateStart >= 0 && hydrateEnd > hydrateStart, 'campaign hydration block should exist')
-  assert.match(hydrateSource, /applyShipOsRemoteState\(remote\.state\)/)
-  assert.match(hydrateSource, /shipOsStateHydratedEvent/)
-  assert.doesNotMatch(hydrateSource, /window\.location\.reload\(\)/)
-
-  assert.match(source, /window\.localStorage\.removeItem\(key\)/)
-  assert.match(source, /!shipOsLocalOnlyStateKeys\.has\(key\)/)
-  assert.match(source, /applyShipOsBackupState\(payload\.state\)/)
+test('ShipOS hydrates shared local state, namespaces legacy browser data, and preserves conflicts', async () => {
+  const source = await readFile(new URL('../src/localState.ts', import.meta.url), 'utf8')
+  assert.match(source, /shipos-beta-v2:/)
+  assert.match(source, /shipos:state-hydrated/)
+  assert.match(source, /expectedRevision: saved\.revision/)
+  assert.match(source, /shipos-beta-recovery/)
+  assert.match(source, /status === 409/)
+  assert.doesNotMatch(source, /session\?\.role === 'viewer'/)
+  assert.match(source, /shared\(key\) && conflict/)
+  assert.doesNotMatch(source, /window\.location\.reload\(\)/)
 })
 
 test('ShipOS treats live sensor contacts as a replaceable packet snapshot', async () => {

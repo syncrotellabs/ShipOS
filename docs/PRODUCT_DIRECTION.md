@@ -1,40 +1,14 @@
-# Product direction
+# Product direction — local beta
 
-## ShipOS is free
+ShipOS is free, open-source MIT donationware. No subscriptions, validation servers, paid tiers, accounts, cloud relay, or hosted campaign service.
 
-ShipOS should be a focused, friendly companion for Space Engineers players and modders. It will not contain paid feature gates, license validation, subscriptions, advertisements, or account requirements for local use.
+Scope: one locally running single-player Space Engineers game on Windows. The gaming PC owns the SQLite database and serves paired local tablets.
 
-## First release: map-first, not map-only
+Two main pages:
 
-The planetary map is the product's center, but a static map would not be useful enough on its own. The first release should include the small set of tools that make the map come alive:
+- Telemetry: compact live values and planetary map, unknown/stale states clearly labelled. Configuration is a closed drawer.
+- Storytelling: optional local AI and the complete campaign toolkit. New stories start empty, with a Star System surface-start prompt instead of a prewritten ship voyage.
 
-- planetary map and local vessel position
-- live local telemetry
-- GPS import and map annotations
-- contacts, relationship filters, and search
-- useful altitude, velocity, heading, and distance readouts
-- local profiles, preferences, import, and export
-- offline operation after installation
+First-visit beta notice explicitly calls out experimental roleplay. RP suggestions and simulated communications do not control the game or establish sensor facts.
 
-Crew records, mail, banking, jobs, AI briefings, and campaign-specific lore should not ship in the first public release. They can survive as optional experiments until there is a clear player need.
-
-## Hosted services
-
-`shipos.echoboardhq.com` may later provide documentation, downloads, update metadata, and an optional hosted viewer. The local map and telemetry path must not depend on that service remaining online.
-
-If remote relay or synchronization is offered later, start with conservative free limits and publish the data-retention behavior clearly. Do not collect gameplay telemetry by default.
-
-## Community posture
-
-- make installation and removal boring and predictable
-- keep the telemetry collector transparent about exactly what it reads and sends
-- publish source for the game-facing mod and plugin
-- accept bug reports and small integrations without turning ShipOS into a giant platform
-- use factual compatibility language and do not imply endorsement by Keen Software House
-
-## Decisions still required
-
-- final product name and trademark clearance
-- Windows package format and code-signing plan
-- ownership and release rights for portraits and campaign assets
-- privacy, support, update, and security-reporting policies
+Future hosted integration with the user's gaming site is deferred. No internet infrastructure is required by this release.

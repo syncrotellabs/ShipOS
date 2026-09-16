@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type Dispatch, type FormEvent, type SetStateAction } from 'react'
+import { usePersistentState, localApi } from './localState'
+import { RecordEditor } from './RecordEditor'
+import { friendlyFleet, focusedTelemetry, fleetLabel, playerTrailPacket } from './fleet'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties, type Dispatch, type FormEvent, type SetStateAction, type ReactNode } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import './ShipOSPage.css'
@@ -296,7 +299,9 @@ type TerrainScanSample = {
   surfaceDelta: number
 }
 
-type TelemetryPacket = {
+type TelemetryReading = {
+  worldId?: string
+  controlMode?: string
   protocol?: string
   source?: string
   modVersion?: string
@@ -377,7 +382,24 @@ type TelemetryPacket = {
   controller?: string
   grid?: string
   notes?: string
+}
+
+export type TaggedGridTelemetry = TelemetryReading & {
+  id: string
+  name: string
+  tag: '[ShipOS]'
+  relationship: 'owned' | 'friendly'
+  kind: 'ship' | 'station'
+  x: number
+  y: number
+  z: number
+}
+
+export type TelemetryPacket = TelemetryReading & {
   contacts?: TelemetryContactPacket[]
+  fleetTag?: string
+  fleetEligibleCount?: number
+  fleet?: TaggedGridTelemetry[]
 }
 
 type TelemetrySample = TelemetryPacket & {
@@ -784,40 +806,23 @@ type PortraitSheetConfig = {
 export type ShipOSExperience = 'navigation' | 'console'
 
 type ShipOSPageProps = {
+  configuration?: ReactNode
+  worldId?: string
+  readOnly?: boolean
   experience?: ShipOSExperience
-  onBack: () => void
-  accessToken: string
-  isSignedIn: boolean
-  canUseRelay: boolean
-  accountName: string
-  accountMode: string
-  onSignIn: () => void
-  onSignOut: () => void
 }
 
-type ShipOsRemoteState = {
-  campaignKey: string
-  state: Record<string, unknown>
-  revision: number
-  updatedBy: string
-  updatedAt: string
-}
 
-type ShipOsTelemetryPairing = {
-  id: string
-  campaignKey: string
-  label: string
-  secret: string
-  createdAt: string
-}
+
+
 
 const shipTabGroups: { id: string; label: string; tabs: { id: PrimaryShipTabId; label: string }[] }[] = [
   {
     id: 'command',
     label: 'Command',
     tabs: [
-      { id: 'captain', label: 'Captain' },
-      { id: 'firstOfficer', label: 'First Officer' },
+      { id: 'captain', label: 'Overview & AI' },
+      { id: 'firstOfficer', label: 'Missions & people' },
     ],
   },
   {
@@ -825,7 +830,6 @@ const shipTabGroups: { id: string; label: string; tabs: { id: PrimaryShipTabId; 
     label: 'Operations',
     tabs: [
       { id: 'flight', label: 'Flight' },
-      { id: 'telemetry', label: 'Telemetry' },
       { id: 'engineering', label: 'Engineering' },
       { id: 'security', label: 'Security' },
     ],
@@ -849,31 +853,29 @@ const shipTabGroups: { id: string; label: string; tabs: { id: PrimaryShipTabId; 
   },
 ]
 
-const shipName = 'DSV Intrepid'
-const captainName = 'Captain Johnathan Hales'
-const operatingAccountInitialCredits = 5000000
+const shipName = 'Engineer'
+const captainName = 'Local player'
+
 const holdingJobId = 'job-holding'
-const campaignSeedVersionKey = 'shipos-campaign-seed-version'
-const campaignSeedVersion = 'intrepid-carthage-europa-run-2026-08-18-v2'
-const currentVoyageLabel = 'Ares -> Europa'
-const currentShipTime = '~07:30 / Morning Watch'
-const currentSoulsAboard = 15
-const currentOperationalStatus = 'GREEN / unrestricted operation'
-const retiredCrewRecordIds = ['crew-pilot-open', 'crew-cheng-open']
-const retiredJobRecordIds = ['job-asterion-helena-transfer', 'job-copper-wake-survey']
-const retiredPassengerFileIds = ['pax-alden-reyes', 'pax-iori-mak', 'pax-senna-vale']
-const retiredCargoRecordIds = ['cargo-medical', 'cargo-cryo-medical', 'cargo-sera-demo']
-const retiredShipConfigurationIds = ['cfg-int-0003-planned']
-const retiredSquawkRecordIds = ['squawk-engineering-baseline', 'squawk-emergency-stations']
-const asterionOrbitalCoords: ShipCoordinate = { x: -87290, y: -88981, z: -87708 }
-const asterionExchangeCoords: ShipCoordinate = { x: -84680, y: -87640, z: -84840 }
-const asterionTrafficNetCoords: ShipCoordinate = { x: -88420, y: -87920, z: -87040 }
-const oldEarthRelayCoords: ShipCoordinate = { x: -92680, y: -86120, z: -81780 }
-const covenantCommsCoords: ShipCoordinate = { x: -80920, y: -91740, z: -92760 }
-const marshalVossNetCoords: ShipCoordinate = { x: -88850, y: -84560, z: -91260 }
-const passengerExchangeCoords: ShipCoordinate = { x: -86420, y: -90220, z: -86640 }
-const copperWakeCoords: ShipCoordinate = { x: -86680, y: -89280, z: -87910 }
-const flightGuildCoords: ShipCoordinate = { x: -87640, y: -88620, z: -88240 }
+
+
+const currentShipTime = 'Player-defined story time'
+const currentSoulsAboard = 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function portraitEntry(id: string, label: string, specialty: string): PortraitEntry {
   return { id, label, specialty }
@@ -1002,9 +1004,9 @@ const portraitSheetConfigs: PortraitSheetConfig[] = [
     url: '/shipos/portrait-sheet-07.png',
     entries: [
       portraitEntry('portrait-district-marshal', 'District Marshal', 'Local authority'),
-      portraitEntry('portrait-traffic-control', 'Traffic Control', 'Asterion traffic'),
+      portraitEntry('portrait-traffic-control', 'Traffic Control', 'Local traffic (fiction)'),
       portraitEntry('portrait-port-inspector', 'Port Inspector', 'Port authority'),
-      portraitEntry('portrait-registry-archivist', 'Registry Archivist', 'Covenant records'),
+      portraitEntry('portrait-registry-archivist', 'Registry Archivist', 'Archive records'),
       portraitEntry('portrait-relay-clerk', 'Relay Clerk', 'OldEarth relay'),
       portraitEntry('portrait-guild-dispatch', 'Guild Dispatch', 'Flight guild'),
       portraitEntry('portrait-passenger-agent', 'Passenger Agent', 'Passenger exchange'),
@@ -1020,7 +1022,7 @@ const portraitSheetConfigs: PortraitSheetConfig[] = [
 const portraitOptions: PortraitOption[] = portraitSheetConfigs.flatMap((sheet) => createPortraitOptions(sheet.url, sheet.entries))
 
 const bodyOrbitSpecs: Record<string, { parentId: string | null; guide: string }> = {
-  'body-helena': { parentId: null, guide: 'Carthage chart origin' },
+  'body-helena': { parentId: null, guide: 'Star System chart origin' },
   'body-mourning': { parentId: 'body-helena', guide: 'Helena moon track' },
   'body-ares': { parentId: 'body-helena', guide: 'Inner system guide' },
   'body-europa': { parentId: 'body-ares', guide: 'Ares moon track' },
@@ -1031,14 +1033,14 @@ const bodyOrbitSpecs: Record<string, { parentId: string | null; guide: string }>
 }
 
 const starSystemBodies: ShipContact[] = [
-  { id: 'body-helena', entityId: '3868533696819502467', generatorName: 'EarthLike', storageName: 'EarthLike-1779144428d120000', name: 'Helena', className: 'Temperate terrestrial world', kind: 'body', x: 0, y: 0, z: 0, status: 'Asterion primary', color: '#75d69d', radiusMeters: 60000, hasAtmosphere: true, surfaceGravity: 1, notes: 'Principal inhabited world below Asterion Orbital. Around 11 million population, with trade, manufacturing, agriculture, and multiple surface governments. Vanilla Star System EarthLike diameter: 120 km.' },
-  { id: 'body-mourning', entityId: '8162427135541297003', generatorName: 'Moon', storageName: 'Moon-1353915701d19000', name: 'Mourning', className: 'Industrial moon', kind: 'body', x: 16384, y: 136384, z: -113615, status: 'Helena mining moon', color: '#c7d6ff', radiusMeters: 9500, hasAtmosphere: false, surfaceGravity: 0.25, notes: 'Industrial and mining moon. Around 600,000 population. Vanilla Star System Moon diameter: 19 km.' },
-  { id: 'body-ares', entityId: '7376538848170297803', generatorName: 'Mars', storageName: 'Mars-2044023682d120000', name: 'Ares', className: 'Cold desert world', kind: 'body', x: 1031072, y: 131072, z: 1631072, status: 'Fragmented frontier', color: '#e06d4f', radiusMeters: 60000, hasAtmosphere: true, surfaceGravity: 0.9, notes: 'Cold desert terrestrial world with heavy freight, prospecting, and mercenary traffic. Vanilla Star System Mars diameter: 120 km.' },
-  { id: 'body-europa', entityId: '-6999989728267602142', generatorName: 'Europa', storageName: 'Europa-595048092d19000', name: 'Europa', className: 'Hydrogen ice moon', kind: 'body', x: 916384, y: 16384, z: 1616384, status: 'Hydrogen exporter', color: '#f6f2a2', radiusMeters: 9500, hasAtmosphere: true, surfaceGravity: 0.25, notes: 'Major hydrogen exporter with several abandoned installations. Vanilla Star System Europa diameter: 19 km.' },
-  { id: 'body-pelagos', entityId: '7227078719122709097', generatorName: 'Alien', storageName: 'Alien-291759539d120000', name: 'Pelagos', className: 'Ocean-heavy world', kind: 'body', x: 131072, y: 131072, z: 5731072, status: 'Orbital piracy risk', color: '#4fb8ff', radiusMeters: 60000, hasAtmosphere: true, surfaceGravity: 1.1, notes: 'Maritime engineering, fisheries, algae production, and recurring piracy around orbital infrastructure. Vanilla Star System Alien diameter: 120 km.' },
-  { id: 'body-vesper', entityId: '6409848419840584595', generatorName: 'Titan', storageName: 'Titan-2124704365d19000', name: 'Vesper', className: 'Dense terraformed biosphere', kind: 'body', x: 36384, y: 226384, z: 5796384, status: 'No-authority zones', color: '#9e7cff', radiusMeters: 9500, hasAtmosphere: true, surfaceGravity: 0.25, notes: 'Dense terraformed biosphere with significant areas marked as having no current civil authority. Vanilla Star System Titan diameter: 19 km.' },
-  { id: 'body-triton', entityId: '6525117208432977790', generatorName: 'Triton', storageName: 'Triton-12345d80253', name: 'Triton', className: 'Frozen outer world', kind: 'body', x: -284463, y: -2434463, z: 365536, status: 'Sparse mining research', color: '#8ee8ff', radiusMeters: 40126.5, hasAtmosphere: true, surfaceGravity: 1, notes: 'Frozen outer world with sparse mining, research activity, and apparently inactive orbital facilities. Vanilla Star System Triton diameter: 80.253 km.' },
-  { id: 'body-pertam', entityId: '6902088205773520807', generatorName: 'Pertam', storageName: 'Pertam-12345d60133', name: 'Pertam', className: 'Hot dry outer world', kind: 'body', x: -3967232, y: -32232, z: -767232, status: 'Old industry', color: '#ffb66e', radiusMeters: 30066.5, hasAtmosphere: true, surfaceGravity: 1.2, notes: 'Hot, dry outer terrestrial world with very old industrial infrastructure and outdated census records. Vanilla Star System Pertam diameter: 60.133 km.' },
+  { id: 'body-helena', generatorName: 'EarthLike', name: 'EarthLike', className: 'Temperate terrestrial world', kind: 'body', x: 0, y: 0, z: 0, status: 'Unverified Star System preset', color: '#75d69d', radiusMeters: 60000, hasAtmosphere: true, surfaceGravity: 1, notes: 'Reference preset only. Live planet registry determines positions in your world.' },
+  { id: 'body-mourning', generatorName: 'Moon', name: 'Moon', className: 'Industrial moon', kind: 'body', x: 16384, y: 136384, z: -113615, status: 'Unverified Star System preset', color: '#c7d6ff', radiusMeters: 9500, hasAtmosphere: false, surfaceGravity: 0.25, notes: 'Reference preset only. Live planet registry determines positions in your world.' },
+  { id: 'body-ares', generatorName: 'Mars', name: 'Mars', className: 'Cold desert world', kind: 'body', x: 1031072, y: 131072, z: 1631072, status: 'Unverified Star System preset', color: '#e06d4f', radiusMeters: 60000, hasAtmosphere: true, surfaceGravity: 0.9, notes: 'Reference preset only. Live planet registry determines positions in your world.' },
+  { id: 'body-europa', generatorName: 'Europa', name: 'Europa', className: 'Hydrogen ice moon', kind: 'body', x: 916384, y: 16384, z: 1616384, status: 'Unverified Star System preset', color: '#f6f2a2', radiusMeters: 9500, hasAtmosphere: true, surfaceGravity: 0.25, notes: 'Reference preset only. Live planet registry determines positions in your world.' },
+  { id: 'body-pelagos', generatorName: 'Alien', name: 'Alien', className: 'Ocean-heavy world', kind: 'body', x: 131072, y: 131072, z: 5731072, status: 'Unverified Star System preset', color: '#4fb8ff', radiusMeters: 60000, hasAtmosphere: true, surfaceGravity: 1.1, notes: 'Reference preset only. Live planet registry determines positions in your world.' },
+  { id: 'body-vesper', generatorName: 'Titan', name: 'Titan', className: 'Dense terraformed biosphere', kind: 'body', x: 36384, y: 226384, z: 5796384, status: 'Unverified Star System preset', color: '#9e7cff', radiusMeters: 9500, hasAtmosphere: true, surfaceGravity: 0.25, notes: 'Reference preset only. Live planet registry determines positions in your world.' },
+  { id: 'body-triton', generatorName: 'Triton', name: 'Triton', className: 'Frozen outer world', kind: 'body', x: -284463, y: -2434463, z: 365536, status: 'Unverified Star System preset', color: '#8ee8ff', radiusMeters: 40126.5, hasAtmosphere: true, surfaceGravity: 1, notes: 'Reference preset only. Live planet registry determines positions in your world.' },
+  { id: 'body-pertam', generatorName: 'Pertam', name: 'Pertam', className: 'Hot dry outer world', kind: 'body', x: -3967232, y: -32232, z: -767232, status: 'Unverified Star System preset', color: '#ffb66e', radiusMeters: 30066.5, hasAtmosphere: true, surfaceGravity: 1.2, notes: 'Reference preset only. Live planet registry determines positions in your world.' },
 ]
 
 const bodyCalibrationAliases: Record<string, string[]> = {
@@ -1055,183 +1057,35 @@ const bodyCalibrationAliases: Record<string, string[]> = {
 const bodyIdByEntityId = new Map(starSystemBodies.flatMap((body) => body.entityId ? [[body.entityId, body.id] as const] : []))
 const bodyIdByStorageName = new Map(starSystemBodies.flatMap((body) => body.storageName ? [[body.storageName.toLowerCase(), body.id] as const] : []))
 
-const relayContacts: ShipContact[] = [
-  { id: 'station-asterion', name: 'Asterion Orbital / Ring Three', className: 'Rotating station', kind: 'station', ...asterionOrbitalCoords, status: 'Departure complete', color: '#f6b94d', faction: 'Asterion Orbital Traffic', notes: 'Large inhabited station at the live Asterion coordinate from telemetry. The Intrepid departed Ring Three / Port 17 for the first commercial mission.' },
-  { id: 'station-asterion-exchange', name: 'Asterion Commercial Exchange', className: 'Passenger and contract station', kind: 'station', ...asterionExchangeCoords, status: 'Berth services active', color: '#ffb66e', faction: 'Passenger Exchange', notes: 'Second Asterion station in the local cluster. Passenger desks, contract brokerage, contractors, job postings, and civilian traffic route through this exchange rather than the traffic-control ring.' },
-  { id: 'relay-asterion-traffic', name: 'Asterion Orbital Traffic', className: 'Port control network', kind: 'relay', ...asterionTrafficNetCoords, status: 'Local traffic linked', color: '#8fb4ff', faction: 'Asterion Orbital Traffic', notes: 'Primary Asterion traffic and berthing network. Placed near Asterion Orbital, offset from the physical station so the network remains independently selectable.' },
-  { id: 'relay-oldearth', name: 'OldEarth Relay Network', className: 'Long-haul wave relay', kind: 'relay', ...oldEarthRelayCoords, status: 'Historic traces only', color: '#7de8d2', faction: 'OldEarth Relay Network', notes: 'Used for simulated long-haul waves and old Hales-family traces. The relay access point is near Asterion, not physically on the station.' },
-  { id: 'relay-covenant', name: 'Covenant Comms System', className: 'EchoAtlas carrier', kind: 'relay', ...covenantCommsCoords, status: 'Registry recognized', color: '#f1e2c6', faction: 'Covenant Comms System', notes: "The system recognized the Intrepid's old Covenant naval registry even after centuries of isolation. The carrier node is offset from the Asterion station marker for map selection." },
-  { id: 'relay-marshal', name: 'Marshal Voss District Net', className: 'Local authority channel', kind: 'relay', ...marshalVossNetCoords, status: 'Frequency approved', color: '#8fb4ff', faction: 'Marshal Voss District Net', notes: 'Marshal Elara Voss approved contact and warned that easy outer-system work often omits important information. Local authority net sits near the Asterion cluster.' },
-  { id: 'relay-passenger-exchange', name: 'Passenger Exchange', className: 'Manifest and contract relay', kind: 'relay', ...passengerExchangeCoords, status: 'Manifest desk linked', color: '#ffdf8d', faction: 'Passenger Exchange', notes: 'Brokerage channel for civilian passenger manifests, fare files, berth logistics, and rejected charter inquiries. Offset near the Commercial Exchange.' },
-  { id: 'relay-copper-wake', name: 'The Copper Wake', className: 'Hiring hall and bar', kind: 'station', ...copperWakeCoords, status: 'Crew and contracts', color: '#ffb66e', faction: 'Independent Civilian Traffic', notes: 'Station-side bar two levels inward from Port 17, used by pilots, engineers, prospectors, mechanics, navigators, security contractors, and independent captains.' },
-  { id: 'relay-flight-guild', name: 'Local Flight Guild', className: 'Recruitment exchange', kind: 'relay', ...flightGuildCoords, status: 'Applicants active', color: '#d68ebd', faction: 'Local Flight Guild', notes: 'Current applicants: Pilot 9, CHENG 6, Doctor 4. Requirements include local accreditations, Fair registry standing, and no unresolved bonded-service disputes.' },
-]
+const relayContacts: ShipContact[] = []
 
-const initialCrew: CrewMember[] = [
-  { id: 'crew-hales', name: 'Johnathan Hales', role: 'Captain / Owner', shift: 'Command', status: `${currentVoyageLabel}; morning watch; unrestricted command operations.`, clearance: 'Command', serviceNumber: 'INT-COM-001', department: 'Command', billet: 'Commanding Officer / Owner', rateMonthly: 0, contractStatus: 'Owner aboard; personal wealth remains separate from the ship operating account and relief authority.', registryStanding: 'Former Covenant Navy', quarters: 'Deck A Captain Quarters', medicalStatus: 'Fit for duty', credentials: ['Former Covenant Navy', 'Entered service at 14 under waiver', '12 years service', 'Intrepid assigned 4 years', 'Commanding officer 2 years', 'ICC-certified IFF holder'], notes: 'No home port. Origin: Old Earth / Covenant Navy service. The Intrepid operates independently in the Carthage system.', portraitId: 'portrait-owner-grey' },
-  { id: 'crew-mara', name: 'Mara Sennett', role: 'First Officer / Executive Officer / Commercial Operations', shift: 'Command', status: 'Running Europa approach planning, manifests, schedules, payroll, procurement, personnel, contracts, and operating accounts.', clearance: 'Commercial Authority', serviceNumber: 'INT-XO-002', department: 'Command', billet: 'Executive / Commercial Officer', rateMonthly: 3000, contractStatus: 'Active crew agreement.', registryStanding: 'Very Good', quarters: 'Private upper cabin', medicalStatus: 'Fit for duty', credentials: ['Commercial operations', 'Finances and contracts', 'Manifests and payroll', 'Procurement and schedules', 'Personnel administration', 'Independent executive authority'], notes: 'Has independent authority in her portfolio and a standing instruction to challenge command decisions when needed.', portraitId: 'portrait-command-red' },
-  { id: 'crew-kessa', name: 'Kessa Vale', role: 'Flight Officer / Pilot', shift: 'Flight', status: 'Owns flight safety and the Ares-to-Europa approach profile.', clearance: 'Flight Authority', serviceNumber: 'INT-FLT-003', department: 'Flight', billet: 'Primary Flight Officer', rateMonthly: 2500, contractStatus: 'Active crew agreement.', registryStanding: 'Excellent', quarters: 'Deck A private cabin', medicalStatus: 'Fit for duty', credentials: ['Commercial First Class pilot', 'Atmospheric heavy', 'Orbital heavy', 'Interplanetary', 'FTL watch certification', 'Approximately 9 years professional flight'], notes: 'Standing command permission: low and fast when Flight judges it safe. Flight authority controls maneuver safety.', portraitId: 'portrait-flight-white' },
-  { id: 'crew-selene', name: 'Dr. Selene Vard', role: "Medical Officer / Ship's Doctor", shift: 'Medical', status: 'Medical suite fully refitted with independent emergency feeds, expanded surgical capability, and reserve systems.', clearance: 'Medical Authority', serviceNumber: 'INT-MED-004', department: 'Medical', billet: "Ship's Doctor / Crew Wellness Adviser", rateMonthly: 2500, contractStatus: 'Active crew agreement; continuing education funded.', registryStanding: 'Very Good', quarters: 'Doctor quarters aft of bridge', medicalStatus: 'Fit for duty', credentials: ['Emergency Medicine', 'Trauma Surgery', 'Shipboard medical certification', 'AutoSurgDoc operation', 'Expanded surgical capability', 'Crew wellness'], notes: 'Protected medical information remains outside ABIGAIL access unless specifically authorized. Medical authority can abort unsafe transfers.', portraitId: 'portrait-medical-white' },
-  { id: 'crew-toren', name: 'Toren Vask', role: 'Chief Engineer / Tactical Secondary', shift: 'Engineering', status: 'Post-refit proving period active; no grounding faults and approximately 50 operating hours requested for confidence.', clearance: 'Engineering Authority', serviceNumber: 'INT-ENG-005', department: 'Engineering', billet: 'Chief Engineer / Tactical Secondary', rateMonthly: 2500, contractStatus: 'Active crew agreement.', registryStanding: 'Excellent', quarters: 'CHENG berth in Engineering', medicalStatus: 'Fit for duty', credentials: ['Chief Engineer Class One', '22 years ship engineering', 'Fusion systems', 'FTL support', 'Atmospheric propulsion', 'Naval-surplus power distribution', 'Weapons power systems'], notes: 'Engineering authority owns the plant. Current discrepancies are observational and do not restrict operations. Assessment: decades of structural life remain.', portraitId: 'portrait-engineer-veteran' },
-  { id: 'crew-garran', name: 'Garran Vex', role: 'Security Officer', shift: 'Security', status: 'Security watch active for a fully occupied passenger deck and unrestricted ship operations.', clearance: 'Security', serviceNumber: 'INT-SEC-006', department: 'Security', billet: 'Security Officer / Boarding Defense', rateMonthly: 2500, contractStatus: 'Active crew agreement.', registryStanding: 'Good', quarters: 'Security berth', medicalStatus: 'Fit for duty', credentials: ['Former special operations', 'Private security', 'Heavy weapons', 'Boarding defense', 'Nonlethal restraint', 'Combat lifesaver'], notes: '6 ft 7 in and approximately 385 pounds lean. Escalation doctrine: presence, de-escalation, restraint, controlled force, then weapons.', portraitId: 'portrait-security-blue' },
-  { id: 'crew-luca', name: 'Luca Bern', role: 'Steward / Cook', shift: 'Galley', status: 'Supporting 15 souls, two galleys, six occupied passenger cabins, stores, meals, and passenger services.', clearance: 'Passenger Services', serviceNumber: 'INT-STW-007', department: 'Hospitality', billet: 'Steward / Cook', rateMonthly: 2500, contractStatus: 'Active crew agreement with broad pantry discretion.', registryStanding: 'Very Good', quarters: 'Crew cabin', medicalStatus: 'Fit for duty', credentials: ['18 years shipboard experience', 'Merchant steward', 'Shipboard cook', 'Passenger service', 'Stores management', 'Food safety', 'Emergency rationing'], notes: 'Maintains a modular hydroponic herb wall with Iria Vale. Becomes sing-songy only while actively cooking.', portraitId: 'portrait-dock-amber' },
-  { id: 'crew-renn', name: 'Renn Harrow', role: 'Survey & Field Liaison', shift: 'Survey / Flight Support', status: 'Active crew; mapping Europa infrastructure, local organizations, needs, resources, and onward opportunities.', clearance: 'Survey / Liaison', serviceNumber: 'INT-SRV-008', department: 'Survey', billet: 'Survey & Field Liaison', rateMonthly: 2500, contractStatus: 'Active crew agreement; 90-day provisional Ares Civil Continuity liaison credential.', registryStanding: 'Fair', quarters: 'Private Deck A crew cabin', medicalStatus: 'Fit for duty', credentials: ['Field survey', 'Infrastructure assessment', 'Local contacts', 'Resource mapping', 'Sensor reconnaissance', 'ShipOS field data'], notes: 'Former passenger. May recommend aid but cannot promise it. Secondary sensor and reconnaissance work remains under Flight authority.', portraitId: 'portrait-outer-surveyor' },
-]
+const initialCrew: CrewMember[] = []
 
-const initialCargo: CargoItem[] = [
-  { id: 'cargo-ice', name: 'Ice', category: 'Resource', quantity: 18400, mass: 18400, bay: 'A1' },
-  { id: 'cargo-components', name: 'Spare Naval Equipment', category: 'Refit stores', quantity: 320, mass: 9600, bay: 'Standardized Mission Bay' },
-  { id: 'cargo-passenger', name: 'Passenger Provisions', category: 'Passenger service', quantity: 15, mass: 1260, bay: 'Upper cabins / galley stores' },
-  { id: 'cargo-iria-case', name: 'Iria Vale Equipment Case', category: 'Passenger declared cargo', quantity: 1, mass: 0, bay: 'Passenger baggage hold' },
-]
+const initialCargo: CargoItem[] = []
 
-const initialJobs: JobRecord[] = [
-  { id: holdingJobId, title: 'Open Passenger Holding', client: 'Shipboard manifest', route: 'Unassigned / intake pending', destination: 'TBD', status: 'On Hold', payout: 0, departure: currentIsoDate(), due: currentIsoDate(), notes: 'Passenger files waiting for a contract packet or destination assignment.', createdAt: Date.now() - 720000 },
-  { id: 'job-ares-europa-pelagos-passage', title: 'Ares to Europa and Pelagos Passenger Run', client: 'Seven-passenger consolidated manifest', route: 'Ares -> Europa (three-day layover) -> Pelagos', destination: 'Pelagos via Europa', status: 'In Transit', payout: 0, departure: currentIsoDate(), due: currentIsoDate(), notes: 'Current paid voyage. Deliver Dr. Amiel Sato at Europa, complete a three-day post-refit layover, then continue to Pelagos. Six passenger cabins are occupied by seven passengers. No emergency or aid mission is currently accepted.', createdAt: Date.now() - 700000 },
-  { id: 'job-helena-ares-medical-transfer', title: 'Helena to Ares Critical Medical Transport', client: 'Helena Medical Authority', route: 'Helena surface facility -> DSV Intrepid -> Ares surface facility', destination: 'Ares surface', status: 'Complete', payout: 118000, departure: currentIsoDate(), due: currentIsoDate(), notes: 'First paid professional mission completed successfully. Two critical-care patients and one accompanying physician were delivered; fuel reimbursement was included.', createdAt: Date.now() - 640000 },
-  { id: 'job-first-run-civilian-passengers', title: 'First Run Civilian Passenger Manifest', client: 'Passenger Exchange / Asterion berthing desk', route: 'Asterion Orbital / Helena route -> Ares', destination: 'Ares', status: 'Complete', payout: 0, departure: currentIsoDate(), due: currentIsoDate(), notes: 'Historic first-run civilian manifest completed at Ares. Renn Harrow subsequently joined the crew.', createdAt: Date.now() - 560000 },
-  { id: 'job-relay-e17-maintenance', title: 'Relay E-17 Maintenance', client: 'Europa contract channel', route: 'Europa local space -> Relay E-17', destination: 'Relay E-17', status: 'Prospect', payout: 0, departure: currentIsoDate(), due: currentIsoDate(), notes: 'Overdue maintenance posting is of interest only. It has NOT been accepted and carries no ship commitment.', createdAt: Date.now() - 180000 },
-  { id: 'job-rejected-passenger-inquiries', title: 'Rejected Passenger Inquiries', client: 'Security / Passenger Exchange', route: 'Asterion Orbital intake review', destination: 'Declined', status: 'On Hold', payout: 0, departure: currentIsoDate(), due: currentIsoDate(), notes: 'Polite declines retained for continuity, future callbacks, or reputation tracking.', createdAt: Date.now() - 420000 },
-]
+const initialJobs: JobRecord[] = []
 
-const initialPassengerFiles: PassengerFile[] = [
-  { id: 'pax-iria-vale', jobId: 'job-ares-europa-pelagos-passage', name: 'Iria Vale', manifestId: 'PAX-EP-001', origin: 'Ares', destination: 'Continued passage under 30-day agreement', cabin: 'Passenger Cabin 1', fare: 0, status: 'In Transit', clearance: 'Contract specialist', risk: 'Low', baggageKg: 0, contact: 'Mara Sennett', medical: 'No active flag', notes: 'Hydroponics specialist. Receives fare reduction for formal shipboard work and maintains the modular herb wall with Luca.', createdAt: Date.now() - 610000, portraitId: 'portrait-hydroponics' },
-  { id: 'pax-derrin-sol', jobId: 'job-ares-europa-pelagos-passage', name: 'Derrin Sol', manifestId: 'PAX-EP-002', origin: 'Ares', destination: 'Pelagos', cabin: 'Passenger Cabin 2', fare: 0, status: 'In Transit', clearance: 'Registry Excellent', risk: 'Low', baggageKg: 0, contact: 'Passenger manifest', medical: 'No active flag', notes: 'Civil and marine infrastructure engineer traveling onward to Pelagos.', createdAt: Date.now() - 600000, portraitId: 'portrait-civil-engineer' },
-  { id: 'pax-amiel-sato', jobId: 'job-ares-europa-pelagos-passage', name: 'Dr. Amiel Sato', manifestId: 'PAX-EP-003', origin: 'Ares', destination: 'Europa', cabin: 'Passenger Cabin 3', fare: 0, status: 'In Transit', clearance: 'Professional credential', risk: 'Low', baggageKg: 0, contact: 'Passenger manifest', medical: 'No active flag', notes: 'Cryogenic engineer specializing in hydrogen storage. Primary Europa delivery.', createdAt: Date.now() - 500000, portraitId: 'portrait-cryo-specialist' },
-  { id: 'pax-talia-or', jobId: 'job-ares-europa-pelagos-passage', name: 'Dr. Talia Or', manifestId: 'PAX-EP-004', origin: 'Ares', destination: 'Pelagos', cabin: 'Passenger Cabin 4', fare: 0, status: 'In Transit', clearance: 'Professional credential', risk: 'Low', baggageKg: 0, contact: 'Passenger manifest', medical: 'Public health professional', notes: 'Public-health epidemiologist traveling to investigate respiratory illness on a Pelagos platform.', createdAt: Date.now() - 490000, portraitId: 'portrait-field-analyst' },
-  { id: 'pax-elias-marr', jobId: 'job-ares-europa-pelagos-passage', name: 'Elias Marr', manifestId: 'PAX-EP-005', origin: 'Ares', destination: 'Pelagos', cabin: 'Passenger Cabin 5 with Juno Marr', fare: 0, status: 'In Transit', clearance: 'Civilian relocation', risk: 'Low', baggageKg: 0, contact: 'Passenger manifest', medical: 'No active flag', notes: 'Marine structural engineer relocating to Pelagos with Juno Marr.', createdAt: Date.now() - 480000, portraitId: 'portrait-repair-foreman' },
-  { id: 'pax-juno-marr', jobId: 'job-ares-europa-pelagos-passage', name: 'Juno Marr', manifestId: 'PAX-EP-006', origin: 'Ares', destination: 'Pelagos', cabin: 'Passenger Cabin 5 with Elias Marr', fare: 0, status: 'In Transit', clearance: 'Civilian relocation', risk: 'Low', baggageKg: 0, contact: 'Passenger manifest', medical: 'No active flag', notes: 'History and literature teacher relocating to Pelagos with Elias Marr.', createdAt: Date.now() - 470000, portraitId: 'portrait-station-teacher' },
-  { id: 'pax-nadia-kess', jobId: 'job-ares-europa-pelagos-passage', name: 'Nadia Kess', manifestId: 'PAX-EP-007', origin: 'Ares', destination: 'Pelagos', cabin: 'Passenger Cabin 6', fare: 0, status: 'In Transit', clearance: 'Paid passenger', risk: 'Low', baggageKg: 0, contact: 'Passenger manifest', medical: 'No active flag', notes: 'Age 34. Investigative journalist and documentarian with 11 years experience. Paid Ares-to-Pelagos passage. Interview and recording boundaries are explicit; private time with Captain Hales is off the record unless agreed otherwise.', createdAt: Date.now() - 460000, portraitId: 'portrait-comms-headset' },
-  { id: 'pax-calen-rusk', jobId: 'job-first-run-civilian-passengers', name: 'Mother Calen Rusk', manifestId: 'PAX-FR-003', origin: 'Asterion Orbital', destination: 'Ares', cabin: 'Released', fare: 0, status: 'Delivered', clearance: 'Registry Very Good', risk: 'Low', baggageKg: 0, contact: 'Parish consortium', medical: 'No flag established', notes: 'Historic first-run passenger delivered at Ares.', createdAt: Date.now() - 590000, portraitId: 'portrait-clergy-traveler' },
-  { id: 'pax-renn-harrow', jobId: 'job-first-run-civilian-passengers', name: 'Renn Harrow', manifestId: 'PAX-FR-004', origin: 'Asterion Orbital', destination: 'Ares', cabin: 'Converted to crew quarters', fare: 0, status: 'Delivered', clearance: 'Now crew', risk: 'Low', baggageKg: 0, contact: 'Mara Sennett', medical: 'Transferred to crew record', notes: 'Historic passenger file closed when Renn joined the crew as Survey & Field Liaison.', createdAt: Date.now() - 580000, portraitId: 'portrait-outer-surveyor' },
-  { id: 'pax-lysa-coren', jobId: 'job-first-run-civilian-passengers', name: 'Lysa Coren', manifestId: 'PAX-FR-005', origin: 'Helena', destination: 'Ares', cabin: 'Released', fare: 0, status: 'Delivered', clearance: 'Clean civilian', risk: 'Low', baggageKg: 0, contact: 'Passenger Exchange', medical: 'No flag established', notes: 'Historic first-run passenger delivered at Ares.', createdAt: Date.now() - 570000, portraitId: 'portrait-passenger-red' },
-  { id: 'pax-tomas-coren', jobId: 'job-first-run-civilian-passengers', name: 'Tomas Coren', manifestId: 'PAX-FR-006', origin: 'Helena', destination: 'Ares', cabin: 'Released', fare: 0, status: 'Delivered', clearance: 'Clean civilian minor', risk: 'Low', baggageKg: 0, contact: 'Lysa Coren', medical: 'No flag established', notes: 'Historic first-run passenger delivered at Ares. Proposed the Ship Chronicle milestone system.', createdAt: Date.now() - 560000, portraitId: 'portrait-family-traveler' },
-  { id: 'pax-sera-dain', jobId: 'job-first-run-civilian-passengers', name: 'Sera Dain', manifestId: 'PAX-FR-007', origin: 'Asterion Orbital', destination: 'Ares', cabin: 'Released', fare: 0, status: 'Delivered', clearance: 'Registry Excellent', risk: 'Low', baggageKg: 0, contact: 'Medical-device supplier channel', medical: 'No personal flag', notes: 'Historic first-run passenger delivered at Ares.', createdAt: Date.now() - 550000, portraitId: 'portrait-device-rep' },
-  { id: 'pax-medical-patient-1', jobId: 'job-helena-ares-medical-transfer', name: 'Critical Patient 1', manifestId: 'MED-FR-001', origin: 'Helena surface facility', destination: 'Ares surface facility', cabin: 'Released to receiving care', fare: 0, status: 'Delivered', clearance: 'Protected medical file', risk: 'Resolved transfer', baggageKg: 0, contact: 'Helena Medical Authority', medical: 'Protected record', notes: 'Historic critical-care transfer completed successfully.', createdAt: Date.now() - 540000, portraitId: 'portrait-flight-nurse' },
-  { id: 'pax-medical-patient-2', jobId: 'job-helena-ares-medical-transfer', name: 'Critical Patient 2', manifestId: 'MED-FR-002', origin: 'Helena surface facility', destination: 'Ares surface facility', cabin: 'Released to receiving care', fare: 0, status: 'Delivered', clearance: 'Protected medical file', risk: 'Resolved transfer', baggageKg: 0, contact: 'Helena Medical Authority', medical: 'Protected record', notes: 'Historic critical-care transfer completed successfully.', createdAt: Date.now() - 530000, portraitId: 'portrait-toxicology' },
-  { id: 'pax-accompanying-physician', jobId: 'job-helena-ares-medical-transfer', name: 'Accompanying Physician', manifestId: 'MED-FR-003', origin: 'Helena surface facility', destination: 'Ares surface facility', cabin: 'Released', fare: 0, status: 'Delivered', clearance: 'Clinical credential', risk: 'Low', baggageKg: 0, contact: 'Helena Medical Authority', medical: 'Not applicable', notes: 'Accompanied both patients through successful delivery.', createdAt: Date.now() - 520000, portraitId: 'portrait-or-surgeon' },
-  { id: 'pax-vale-orlan', jobId: 'job-rejected-passenger-inquiries', name: 'Vale Orlan', manifestId: 'REJ-FR-001', origin: 'Asterion Orbital', destination: 'Undisclosed outer-system commercial business', cabin: 'Declined', fare: 0, status: 'Declined', clearance: 'Insufficient disclosure', risk: 'High', baggageKg: 0, contact: 'Commercial broker inquiry', medical: 'Not applicable', notes: 'Wanted to charter all six cabins for himself and unnamed associates while refusing to disclose destination beyond vague outer-system commercial business. Declined politely.', createdAt: Date.now() - 510000, portraitId: 'portrait-cargo-broker' },
-  { id: 'pax-joren-kael', jobId: 'job-rejected-passenger-inquiries', name: 'Joren Kael', manifestId: 'REJ-FR-002', origin: 'Asterion Orbital', destination: 'First run request declined', cabin: 'Declined', fare: 0, status: 'Declined', clearance: 'Good registry standing; weapon access not approved', risk: 'Medium', baggageKg: 0, contact: 'Former security contractor', medical: 'Not applicable', notes: 'Declared two secured weapons cases and requested permission for personal sidearm access aboard. Declined politely for the first run; could reappear later.', createdAt: Date.now() - 500000, portraitId: 'portrait-boarding-veteran' },
-]
+const initialPassengerFiles: PassengerFile[] = []
 
-const initialMetagameRecords: MetagameRecord[] = [
-  { id: 'meta-carthage-isolation', kind: 'Mystery', name: 'Carthage Isolation Gap', visibility: 'GM-only', status: 'Active campaign mystery', tags: ['Carthage', '583 years', 'telemetry'], notes: 'Carthage remained separated from meaningful Covenant civilization for roughly 583 years. The reason remains behind-the-scenes canon until discovered in play.', createdAt: Date.now() - 650000 },
-  { id: 'meta-faction-dsv-intrepid', kind: 'Faction', name: 'DSV Intrepid', visibility: 'Canon', status: currentOperationalStatus, tags: ['Intrepid', 'owned grid', 'crew', 'Carthage'], notes: 'Independent former Covenant naval vessel. Current voyage Ares to Europa with 15 souls aboard, no formally designated home port, and no emergency or aid mission accepted.', createdAt: Date.now() - 635000 },
-  { id: 'meta-hales-archive-trace', kind: 'Faction', name: 'Hales Family Archive Trace', visibility: 'Canon', status: 'Known locally through old trade records', tags: ['Old Earth', 'wealth', 'archives'], notes: 'The Hales name appears in Carthage trade and investment archives despite the isolation. Local interpretation: money so old that nobody remembers where it began.', createdAt: Date.now() - 620000 },
-  { id: 'meta-faction-asterion-traffic', kind: 'Faction', name: 'Asterion Orbital Traffic', visibility: 'Canon', status: 'Primary port and traffic authority', tags: ['Asterion', 'Helena', 'port authority'], notes: 'Traffic and docking authority that recognized Intrepid registry at Ring Three / Port 17.', createdAt: Date.now() - 615000 },
-  { id: 'meta-faction-helena-medical', kind: 'Faction', name: 'Helena Medical Authority', visibility: 'Canon', status: 'First paid contract completed', tags: ['Helena', 'medical', 'contract'], notes: 'Origin authority for the successfully completed Helena-to-Ares critical-care transport.', createdAt: Date.now() - 610000 },
-  { id: 'meta-faction-passenger-exchange', kind: 'Faction', name: 'Passenger Exchange', visibility: 'Canon', status: 'Passenger and contract brokerage channel', tags: ['Asterion', 'passengers', 'contracts'], notes: 'Source of first-run passenger manifests, charter inquiries, and berth logistics.', createdAt: Date.now() - 605000 },
-  { id: 'meta-faction-covenant-comms', kind: 'Faction', name: 'Covenant Comms System', visibility: 'Canon', status: 'Registry-recognized long-haul network', tags: ['Covenant', 'relay', 'registry'], notes: 'Long-haul comms system that recognized the old Covenant naval registry format.', createdAt: Date.now() - 600000 },
-  { id: 'meta-faction-oldearth-relay', kind: 'Faction', name: 'OldEarth Relay Network', visibility: 'Canon', status: 'Historic traces only', tags: ['Old Earth', 'relay', 'Hales'], notes: 'Old communications network used for simulated long-haul waves and archive traces.', createdAt: Date.now() - 595000 },
-  { id: 'meta-faction-marshal-voss', kind: 'Faction', name: 'Marshal Voss District Net', visibility: 'Canon', status: 'Approved local authority channel', tags: ['Asterion', 'law', 'traffic'], notes: 'Local law/authority frequency approved by Marshal Elara Voss.', createdAt: Date.now() - 592000 },
-  { id: 'meta-faction-flight-guild', kind: 'Faction', name: 'Local Flight Guild', visibility: 'Canon', status: 'Recruitment and credential exchange', tags: ['crew', 'hiring', 'flight'], notes: 'Local recruitment and credential channel for pilots, engineers, doctors, and other licensed ship personnel.', createdAt: Date.now() - 588000 },
-  { id: 'meta-faction-independent-civilian', kind: 'Faction', name: 'Independent Civilian Traffic', visibility: 'Canon', status: 'Loose civilian and commercial contacts', tags: ['civilian', 'merchant', 'neutral'], notes: 'Default faction bucket for independent ships, bars, contractors, and unaligned commercial traffic.', createdAt: Date.now() - 584000 },
-  { id: 'meta-location-asterion-cluster', kind: 'Location', name: 'Asterion Orbital Cluster', visibility: 'Canon', status: 'Anchored to live telemetry coordinate', tags: ['Asterion', 'Helena orbit', 'relay cluster'], notes: 'Canon Asterion lore contacts are anchored around GPS:-87290:-88981:-87708. Physical stations occupy the center of the cluster; relay and administrative networks are nearby offset contacts so they remain distinct from the station grids on the map.', createdAt: Date.now() - 582000 },
-  { id: 'meta-internal-dampening', kind: 'System Note', name: 'Internal Dampening Modernization', visibility: 'Canon', status: 'COMPLETED / CERTIFICATION PASS', tags: ['Intrepid', 'medical', 'FTL', 'Meridian'], notes: 'Localized high-resolution dampening now protects Medical, the passenger deck, bridge, and crew accommodations. Live simulated controller and node failures passed.', createdAt: Date.now() - 590000 },
-  { id: 'meta-mission-bay', kind: 'Location', name: 'Large Aft Mission Bay', visibility: 'Canon', status: 'Unassigned / utility-ready', tags: ['Intrepid', 'future build', 'ship map'], notes: 'Deliberately unassigned. Meridian installed standardized power, data, atmosphere, water, waste, cooling, and modular equipment hardpoints so future conversion needs no major structural opening.', createdAt: Date.now() - 560000 },
-  { id: 'meta-ares-meridian-refit', kind: 'System Note', name: 'Ares Meridian Civilian Refit', visibility: 'Canon', status: 'Completed for 1,981,440 credits', tags: ['Intrepid', 'Ares', 'refit', 'Meridian'], notes: 'Completed under the 2,000,000 credit authorization ceiling. Dampening, FTL isolation, atmospheric actuators, coolant monitoring, distributed Engineering, Medical power, passenger safety, Mission Bay utilities, sensors, and ABIGAIL were modernized.', createdAt: Date.now() - 220000 },
-  { id: 'meta-historic-port-spine', kind: 'System Note', name: 'Historic Port-Spine Combat Scar', visibility: 'Canon', status: 'HISTORIC DAMAGE - PRESERVED', tags: ['Intrepid', 'historic damage', 'command'], notes: 'Internal structure, armor backing, and pressure structure are restored to full specification. The reinforced exterior scar remains intentionally visible opposite the former communications sleeping cubby.', createdAt: Date.now() - 210000 },
-  { id: 'meta-abigail-mk7', kind: 'System Note', name: 'ABIGAIL Mk VII', visibility: 'Canon', status: 'ONLINE / SUPERVISED OPERATIONAL', tags: ['Intrepid', 'ShipOS', 'AI', 'ABIGAIL'], notes: 'Integrates navigation, sensors, communications, environment, engineering telemetry, maintenance, inventory, manifests, and public information. Cannot fire or authorize weapons, initiate FTL, override Flight or Engineering safeties, defeat FTL isolation, or access protected Medical data without authorization.', createdAt: Date.now() - 200000 },
-  { id: 'meta-relief-authority', kind: 'Faction', name: 'Carthage Provisional Relief Authority', visibility: 'Canon', status: 'Funded / no deployments / no commitments', tags: ['Carthage', 'relief', 'Edicarus Hales'], notes: '10,000,000 credits held entirely separate from Intrepid operating funds. Forty-three prospective volunteers and three private vessel owners are standing by. Doctrine: ask, verify, use local capability first, help when appropriate, and do nothing when appropriate.', createdAt: Date.now() - 190000 },
-  { id: 'meta-relay-e17', kind: 'Contract', name: 'Relay E-17 Maintenance', visibility: 'Canon', status: 'Prospect - NOT ACCEPTED', tags: ['Europa', 'relay', 'contract'], notes: 'Automated navigation relay maintenance crew is overdue. The posting remains interesting but creates no current obligation.', createdAt: Date.now() - 180000 },
-  { id: 'meta-echo-rumor-network', kind: 'Rumor', name: 'Echo of the System', visibility: 'GM-only', status: 'Future simulation idea', tags: ['rumors', 'reputation', 'network'], notes: 'Major Intrepid actions could propagate through Carthage as facts, local versions, system-wide rumors, and propaganda versions.', createdAt: Date.now() - 530000 },
-]
+const initialMetagameRecords: MetagameRecord[] = []
 
-const initialLocationRecords: LocationRecord[] = [
-  { id: 'loc-body-helena', contactId: 'body-helena', name: 'Helena', body: 'Helena', className: 'Primary inhabited world', knowledgeState: 'VERIFIED', confidence: 'CONFIRMED', x: 0, y: 0, z: 0, altitude: 'Planetary datum', gravity: 'Planetary gravity well', atmosphere: 'Breathable / inhabited', landingSuitability: 'Known surface facilities; use local traffic clearance.', approachNotes: 'Asterion orbital control and surface medical traffic were both cooperative during the first mission.', hazards: 'Industrial zones and regional surface authority boundaries still require local confirmation.', previousVisits: ['Atmospheric insertion and medical pickup completed.'], knownRoutes: ['Asterion Orbital -> Helena medical facility', 'Helena -> Ares non-FTL transfer'], pilotAnnotations: 'Repeat Approach: direct medical pickup worked; preserve patient-safe acceleration and avoid rushed east-side terrain profiles until mapped.', whyHere: 'First commercial mission: embarked two critical-care patients and an accompanying physician for Ares.', relatedJobIds: ['job-helena-ares-medical-transfer'], relatedEntityIds: ['org-helena-medical-authority'], updatedAt: Date.now() - 120000 },
-  { id: 'loc-station-asterion', contactId: 'station-asterion', name: 'Asterion Orbital / Ring Three Port 17', body: 'Helena orbit', className: 'Port / traffic control', knowledgeState: 'VERIFIED', confidence: 'CONFIRMED', ...asterionOrbitalCoords, altitude: 'Orbital station', gravity: 'Station rotation / local artificial gravity', atmosphere: 'Pressurized port', landingSuitability: 'Docking berth confirmed for Intrepid registry.', approachNotes: 'Weapons safed while docked. Ring Three / Port 17 recognized old Covenant naval registry. Canon anchor coordinate matches the observed SB-2009 Asterion Orbital telemetry contact.', hazards: 'Customs, berth fees, old-money attention, and dense local traffic around the Asterion station pair.', previousVisits: ['Arrival and crew hiring complete.', 'Departed for Helena pickup.'], knownRoutes: ['Carthage entry vector -> Asterion', 'Asterion -> Helena', 'Asterion -> Ares', 'Asterion Orbital -> Asterion Commercial Exchange'], pilotAnnotations: 'Good baseline port. Preserve departure clearance logs for repeat outbound profiles. Expect relay markers nearby but not co-located with the station grid.', whyHere: 'Initial Carthage arrival, crew hiring, medical refit, passenger intake, and first contract setup.', relatedJobIds: ['job-first-run-civilian-passengers', 'job-helena-ares-medical-transfer'], relatedEntityIds: ['org-asterion-traffic', 'org-passenger-exchange', 'org-covenant-comms', 'org-oldearth-relay'], updatedAt: Date.now() - 180000 },
-  { id: 'loc-station-asterion-exchange', contactId: 'station-asterion-exchange', name: 'Asterion Commercial Exchange', body: 'Helena orbit / Asterion cluster', className: 'Passenger and contract station', knowledgeState: 'VERIFIED', confidence: 'CONFIRMED', ...asterionExchangeCoords, altitude: 'Orbital station', gravity: 'Station rotation / local artificial gravity', atmosphere: 'Pressurized commercial concourse', landingSuitability: 'Commercial docking and passenger transfer hub; exact berth assignment pending live clearance.', approachNotes: 'Separate station from Asterion Orbital. Use this marker for Passenger Exchange, contract brokerage, and non-traffic civilian services.', hazards: 'Brokerage disputes, customs checks, passenger security screening, and crowded approach lanes.', previousVisits: ['Passenger manifest and contractor channels established through Asterion services.'], knownRoutes: ['Asterion Commercial Exchange -> Asterion Orbital', 'Asterion Commercial Exchange -> Helena', 'Asterion Commercial Exchange -> Ares'], pilotAnnotations: 'Treat as a nearby but separate Asterion station. Do not stack relay network markers directly on this grid.', whyHere: 'Civilian passenger files, job brokerage, rejected charter inquiries, and commercial refit coordination.', relatedJobIds: ['job-first-run-civilian-passengers', 'job-rejected-passenger-inquiries'], relatedEntityIds: ['org-passenger-exchange', 'org-flight-guild', 'org-independent-civilian'], updatedAt: Date.now() - 170000 },
-  { id: 'loc-helena-medical-transfer', name: 'Helena Medical Transfer Facility', body: 'Helena', className: 'Surface medical pickup site', knowledgeState: 'OBSERVED', confidence: 'CONFIRMED', x: 18000, y: -3200, z: 9400, altitude: 'Surface facility', gravity: 'Helena gravity', atmosphere: 'Breathable / hospital controlled', landingSuitability: 'Heavy-vessel landing access confirmed during medical pickup.', approachNotes: 'Direct atmospheric pickup selected to reduce transfer risk. Preserve gentle ascent profile for future medical work.', hazards: 'Critical patient transfer timing, surface traffic, and medical authority coordination.', previousVisits: ['Two critical patients embarked.'], knownRoutes: ['Helena medical facility -> Ares surface facility'], pilotAnnotations: 'GOOD LZ for heavy medical transfer. Keep low-jerk climb profile with medical signoff.', whyHere: 'Embarked medical patients for first professional contract.', relatedJobIds: ['job-helena-ares-medical-transfer'], relatedEntityIds: ['org-helena-medical-authority'], updatedAt: Date.now() - 90000 },
-  { id: 'loc-body-ares', contactId: 'body-ares', name: 'Ares', body: 'Ares', className: 'Cold desert world / completed port call', knowledgeState: 'VERIFIED', confidence: 'CONFIRMED', x: 1031072, y: 131072, z: 1631072, altitude: 'Planetary datum', gravity: 'Planetary gravity well', atmosphere: 'Thin / cold desert', landingSuitability: 'Heavy Intrepid operations and Meridian yard access verified.', approachNotes: 'First medical delivery and major civilian refit completed. Ares Civil Continuity contacts established.', hazards: 'Fragmented frontier traffic, prospecting lanes, mercenary presence, and regional authority boundaries.', previousVisits: ['Critical patients delivered alive.', 'First paid mission completed.', 'Ares Meridian refit completed.', 'Departed for Europa.'], knownRoutes: ['Helena -> Ares non-FTL medical route', 'Ares -> Europa', 'Ares -> Pelagos via Europa'], pilotAnnotations: 'Preserve the verified arrival and departure profiles. Meridian technical support is a proven contact.', whyHere: 'Completed first paid mission, first major civilian refit, crew expansion, and Civil Continuity liaison setup.', relatedJobIds: ['job-helena-ares-medical-transfer', 'job-first-run-civilian-passengers', 'job-ares-europa-pelagos-passage'], relatedEntityIds: ['org-helena-medical-authority', 'org-ares-meridian', 'org-ares-continuity'], updatedAt: Date.now() - 60000 },
-  { id: 'loc-body-europa', contactId: 'body-europa', name: 'Europa', body: 'Europa', className: 'Hydrogen ice moon / next destination', knowledgeState: 'OBSERVED', confidence: 'CONFIRMED', x: 916384, y: 16384, z: 1616384, altitude: 'Planetary datum', gravity: 'Moon gravity well', atmosphere: 'Ice moon / controlled habitats', landingSuitability: 'Approach and landing clearance not yet recorded.', approachNotes: 'Plan a roughly three-day layover. Deliver Dr. Amiel Sato, complete post-refit inspection, allow liberty, survey local organizations, and seek ordinary commercial work.', hazards: 'Hydrogen industrial traffic, abandoned installations, and unverified Relay E-17 status.', previousVisits: [], knownRoutes: ['Ares -> Europa', 'Europa -> Pelagos'], pilotAnnotations: 'No emergency profile. Give Toren time for the first sustained-operation inspection.', whyHere: 'Passenger delivery, post-refit proving, liberty, survey familiarization, and commercial opportunity.', relatedJobIds: ['job-ares-europa-pelagos-passage', 'job-relay-e17-maintenance'], relatedEntityIds: ['person-amiel-sato', 'org-ares-continuity'], updatedAt: Date.now() - 50000 },
-  { id: 'loc-body-pelagos', contactId: 'body-pelagos', name: 'Pelagos', body: 'Pelagos', className: 'Ocean-heavy world / subsequent destination', knowledgeState: 'OBSERVED', confidence: 'CONFIRMED', x: 131072, y: 131072, z: 5731072, altitude: 'Planetary datum', gravity: 'Planetary gravity well', atmosphere: 'Inhabited ocean-world environment', landingSuitability: 'Exact arrival port not yet selected.', approachNotes: 'Planned after Europa. Stay may be extended rather than a simple turnaround.', hazards: 'Orbital piracy risk, maritime industrial traffic, and platform health concerns.', previousVisits: [], knownRoutes: ['Europa -> Pelagos'], pilotAnnotations: 'Arrival plan should account for several passenger destinations and potential extended operations.', whyHere: 'Deliver five onward passengers and explore longer-term commercial and infrastructure opportunities.', relatedJobIds: ['job-ares-europa-pelagos-passage'], relatedEntityIds: ['person-talia-or', 'person-nadia-kess', 'person-derrin-sol'], updatedAt: Date.now() - 40000 },
-]
+const initialLocationRecords: LocationRecord[] = []
 
-const initialDirectoryEntities: DirectoryEntity[] = [
-  { id: 'person-johnathan-hales', kind: 'Person', name: 'Johnathan Hales', role: 'Captain / owner', relationship: 'Commanding officer', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-body-ares'], jobIds: ['job-ares-europa-pelagos-passage'], notes: 'Former Covenant Navy. Entered at 14 under waiver, served 12 years, spent approximately four aboard Intrepid and commanded her for two. Personal wealth is separate from ship operations.' },
-  { id: 'person-mara-sennett', kind: 'Person', name: 'Mara Sennett', role: 'First Officer / commercial executive', relationship: 'Crew', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-station-asterion'], jobIds: ['job-first-run-civilian-passengers', 'job-helena-ares-medical-transfer'], notes: 'Responsible for making modules relational: jobs, contacts, locations, waves, transactions, and incidents should reference each other.' },
-  { id: 'person-renn-harrow', kind: 'Person', name: 'Renn Harrow', role: 'Survey & Field Liaison', relationship: 'Crew', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-body-ares', 'loc-body-europa'], jobIds: ['job-ares-europa-pelagos-passage'], notes: 'Full crew. Holds a 90-day provisional Ares Civil Continuity liaison credential. May recommend aid but cannot promise aid or funding.' },
-  { id: 'person-mother-calen-rusk', kind: 'Person', name: 'Mother Calen Rusk', role: 'Passenger / clergy', relationship: 'Passenger', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-station-asterion'], jobIds: ['job-first-run-civilian-passengers'], notes: 'Proposed tracking open commitments and promises that are not formal contracts.' },
-  { id: 'person-tomas-coren', kind: 'Person', name: 'Tomas Coren', role: 'Passenger / minor', relationship: 'Passenger', standing: 'CONFIRMED', privacy: 'Sensitive', locationIds: ['loc-body-helena'], jobIds: ['job-first-run-civilian-passengers'], notes: 'Proposed the milestone system later renamed Ship Chronicle.' },
-  { id: 'org-helena-medical-authority', kind: 'Organization', name: 'Helena Medical Authority', role: 'Medical client', relationship: 'Completed contract client', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-helena-medical-transfer', 'loc-body-ares'], jobIds: ['job-helena-ares-medical-transfer'], notes: 'Paid first contract: 118,000 credits plus fuel reimbursement for the successful delivery of two critical patients and an accompanying physician.' },
-  { id: 'org-asterion-traffic', kind: 'Organization', name: 'Asterion Orbital Traffic', role: 'Port authority', relationship: 'Operational contact', standing: 'CONFIRMED', privacy: 'Public', locationIds: ['loc-station-asterion', 'loc-relay-asterion-traffic'], jobIds: [], notes: 'Recognized Intrepid registry and managed Ring Three / Port 17 docking from the Asterion Orbital cluster.' },
-  { id: 'org-passenger-exchange', kind: 'Organization', name: 'Passenger Exchange', role: 'Passenger and contract broker', relationship: 'Commercial channel', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-station-asterion-exchange', 'loc-relay-passenger-exchange'], jobIds: ['job-first-run-civilian-passengers'], notes: 'Source for civilian passenger manifest, berth logistics, job brokerage, and rejected inquiries around the Asterion Commercial Exchange.' },
-  { id: 'org-covenant-comms', kind: 'Organization', name: 'Covenant Comms System', role: 'Long-haul communications network', relationship: 'Registry-recognized network', standing: 'PROBABLE', privacy: 'Shipboard', locationIds: ['loc-relay-covenant'], jobIds: [], notes: 'Recognized the old Covenant registry format; long-term network reconnection relevance. Local carrier access is offset near Asterion rather than on the station grid.' },
-  { id: 'org-oldearth-relay', kind: 'Organization', name: 'OldEarth Relay Network', role: 'Historic long-haul relay', relationship: 'Archive trace network', standing: 'PROBABLE', privacy: 'Shipboard', locationIds: ['loc-relay-oldearth'], jobIds: [], notes: 'Historic network used for simulated long-haul waves and Hales-family archive traces. Local access point sits near Asterion.' },
-  { id: 'org-marshal-voss-net', kind: 'Organization', name: 'Marshal Voss District Net', role: 'Local authority channel', relationship: 'Courtesy contact', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-relay-marshal'], jobIds: [], notes: 'Local law and authority frequency approved by Marshal Elara Voss for the Intrepid.' },
-  { id: 'org-flight-guild', kind: 'Organization', name: 'Local Flight Guild', role: 'Recruitment and credential exchange', relationship: 'Hiring channel', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-relay-flight-guild', 'loc-station-asterion-exchange'], jobIds: [], notes: 'Local hiring channel for pilots, engineers, doctors, and licensed ship personnel.' },
-  { id: 'org-independent-civilian', kind: 'Organization', name: 'Independent Civilian Traffic', role: 'Loose commercial contact bucket', relationship: 'Neutral traffic', standing: 'PROBABLE', privacy: 'Public', locationIds: ['loc-relay-copper-wake', 'loc-station-asterion-exchange'], jobIds: [], notes: 'Default bucket for independent ships, bars, contractors, and unaligned commercial traffic near Asterion.' },
-  { id: 'person-amiel-sato', kind: 'Person', name: 'Dr. Amiel Sato', role: 'Cryogenic systems engineer', relationship: 'Passenger / Europa delivery', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-body-europa'], jobIds: ['job-ares-europa-pelagos-passage'], notes: 'Traveling to inspect hydrogen-storage facilities on Europa.' },
-  { id: 'person-talia-or', kind: 'Person', name: 'Dr. Talia Or', role: 'Public-health epidemiologist', relationship: 'Passenger / possible future contact', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-body-pelagos'], jobIds: ['job-ares-europa-pelagos-passage'], notes: 'Studying respiratory illness among Pelagos platform settlements.' },
-  { id: 'person-nadia-kess', kind: 'Person', name: 'Nadia Kess', role: 'Investigative journalist / documentarian', relationship: 'Paid passenger; professionally independent', standing: 'CONFIRMED', privacy: 'Sensitive', locationIds: ['loc-body-ares', 'loc-body-pelagos'], jobIds: ['job-ares-europa-pelagos-passage'], notes: 'Age 34, Pelagos, 11 years experience. Recording boundaries apply in private or restricted spaces. Developing relationship with Captain Hales remains undefined and organic.' },
-  { id: 'org-ares-meridian', kind: 'Organization', name: 'Ares Meridian Naval Works', role: 'Shipyard / refit contractor', relationship: 'Proven technical vendor', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-body-ares'], jobIds: [], notes: 'Completed the 1,981,440 credit civilian refit under the 2,000,000 authorization ceiling.' },
-  { id: 'org-ares-continuity', kind: 'Organization', name: 'Ares Civil Continuity Network', role: 'Infrastructure continuity network', relationship: 'Provisional liaison contact', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: ['loc-body-ares', 'loc-body-europa'], jobIds: [], notes: 'Issued Renn a 90-day provisional liaison credential. Grants contacts and information, not authority to commit Ares or Intrepid resources.' },
-  { id: 'org-carthage-relief', kind: 'Organization', name: 'Carthage Provisional Relief Authority', role: 'Verified-need relief reserve', relationship: 'Separate Hales initiative', standing: 'CONFIRMED', privacy: 'Shipboard', locationIds: [], jobIds: [], notes: '10,000,000 credits, 43 prospective volunteers, and three interested private vessel owners. No deployments, commitments, or funds spent.' },
-]
+const initialDirectoryEntities: DirectoryEntity[] = []
 
-const initialShipConfigurations: ShipConfigurationRecord[] = [
-  { id: 'cfg-int-0001', version: 'INT-0001', date: currentIsoDate(), change: 'Carthage arrival baseline', reason: 'Create technical memory after entering Carthage operations.', shipyard: 'DSV Intrepid / Asterion Orbital', engineer: 'Toren Vask', cost: 0, notes: 'Historic former Covenant naval baseline retained for configuration history.' },
-  { id: 'cfg-int-0002', version: 'INT-0002', date: currentIsoDate(), previousVersion: 'INT-0001', change: 'Shipboard medical conversion', reason: 'Support Helena-to-Ares critical-care work.', shipyard: 'Asterion medical contractors', engineer: 'Dr. Selene Vard / Toren Vask', cost: 276000, relatedJobId: 'job-helena-ares-medical-transfer', notes: 'Compact high-end trauma OR, AutoSurgDoc, recovery, isolation, advanced diagnostics, and cryogenic capability.' },
-  { id: 'cfg-int-0003', version: 'INT-0003', date: currentIsoDate(), previousVersion: 'INT-0002', change: 'Major civilian refit and ABIGAIL Mk VII integration', reason: 'Modernize safety, redundancy, survey capacity, and ship intelligence after the first paid mission.', shipyard: 'Ares Meridian Naval Works', engineer: 'Toren Vask / Meridian yard team', cost: 1981440, notes: 'Authorization ceiling 2,000,000. Includes localized dampening, FTL isolation, paired atmospheric actuators, coolant harness, distributed Engineering, Medical emergency power, passenger safety, Mission Bay utilities, enhanced sensors, preserved historic scar, and ABIGAIL Mk VII.' },
-]
+const initialShipConfigurations: ShipConfigurationRecord[] = []
 
-const initialSquawks: SquawkRecord[] = [
-  { id: 'squawk-dampening-overhaul', system: 'Inertial Dampening', title: 'Localized dampening modernization', state: 'CLOSED', condition: 'Certification PASS', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask / Dr. Selene Vard', relatedConfigId: 'cfg-int-0003', notes: 'Medical, passenger deck, bridge, and crew accommodation zones passed controller and node-failure simulations.' },
-  { id: 'squawk-abigail-upgrade', system: 'ABIGAIL / Ship AI', title: 'ABIGAIL Mk VII installation', state: 'CLOSED', condition: 'ONLINE / supervised operational', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask / Johnathan Hales', relatedConfigId: 'cfg-int-0003', notes: 'Hard isolation remains available to Engineering. Authority limits are enforced.' },
-  { id: 'squawk-refit-proving', system: 'Engineering', title: 'Complete 50-hour post-refit proving period', state: 'OPEN', condition: 'Operational; evidence collection in progress', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask', relatedConfigId: 'cfg-int-0003', notes: 'No operating restriction. Toren wants sustained-operation evidence before declaring the full refit proven.' },
-  { id: 'squawk-shield-capacitor', system: 'Shields', title: 'Minor shield-capacitor thermal discrepancy', state: 'OPEN', condition: 'Observed; no operational effect', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask', relatedConfigId: 'cfg-int-0003', notes: 'Trend during the Europa leg.' },
-  { id: 'squawk-dampening-latency', system: 'Inertial Dampening', title: 'Localized node startup latency', state: 'OPEN', condition: 'Slight startup delay on one node', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask', relatedConfigId: 'cfg-int-0003', notes: 'Does not affect current certification or operations.' },
-  { id: 'squawk-passenger-valve', system: 'Passenger Environment', title: 'Noisy passenger environmental valve', state: 'OPEN', condition: 'Function normal; acoustic discrepancy', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask / Luca Bern', relatedConfigId: 'cfg-int-0003', notes: 'Inspect during Europa layover.' },
-  { id: 'squawk-sensor-calibration', system: 'Sensors', title: 'Sensor calibration disagreement', state: 'WATCH', condition: 'Minor cross-package disagreement', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask / Renn Harrow', relatedConfigId: 'cfg-int-0003', notes: 'Compare passive, vessel-ID, geological, and atmospheric solutions.' },
-  { id: 'squawk-atmo-actuators', system: 'Atmospheric Propulsion', title: 'Paired actuator bedding trend', state: 'WATCH', condition: 'Both replacements nominal', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask / Kessa Vale', relatedConfigId: 'cfg-int-0003', notes: 'Monitor paired load and thermal balance during next atmosphere cycle.' },
-  { id: 'squawk-coolant-harness', system: 'Coolant Monitoring', title: 'Replacement harness proving trend', state: 'WATCH', condition: 'Secondary monitor harness nominal', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask', relatedConfigId: 'cfg-int-0003', notes: 'Confirm stability after sustained operation.' },
-  { id: 'squawk-medical-feed', system: 'Medical Power', title: 'Independent emergency feed proving check', state: 'WATCH', condition: 'Reserve and independent feeds nominal', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask / Dr. Selene Vard', relatedConfigId: 'cfg-int-0003', notes: 'Exercise during post-refit inspection without disrupting Medical.' },
-  { id: 'squawk-ftl-isolation', system: 'FTL Isolation', title: 'Independent isolation event logging', state: 'WATCH', condition: 'Bridge, Engineering, and local mechanical disconnect nominal', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask / Kessa Vale', relatedConfigId: 'cfg-int-0003', notes: 'ABIGAIL may monitor but cannot override isolation.' },
-  { id: 'squawk-abigail-supervision', system: 'ABIGAIL / ShipOS', title: 'Supervised integration watch', state: 'WATCH', condition: 'All authorized integrations nominal', openedAt: currentIsoDate(), inspectionDue: currentIsoDate(), responsible: 'Toren Vask / Department Heads', relatedConfigId: 'cfg-int-0003', notes: 'Confirm authority boundaries under normal operations. Zero grounding squawks.' },
-]
+const initialSquawks: SquawkRecord[] = []
 
-const initialCommitments: CommitmentRecord[] = [
-  { id: 'commit-ares-medical-followup', person: 'Helena Medical Authority', promise: 'Deliver two critical-care patients to Ares under the patient-safe profile.', date: currentIsoDate(), location: 'Ares surface facility', timeframe: 'Completed first mission', status: 'Fulfilled', notes: 'Both patients arrived alive and the client paid.' },
-  { id: 'commit-derrin-routing', person: 'Derrin Sol', promise: 'Carry Derrin onward to Pelagos.', date: currentIsoDate(), location: 'Pelagos', timeframe: 'After Europa layover', status: 'Open', notes: 'Routing is now confirmed.' },
-  { id: 'commit-sato-europa', person: 'Dr. Amiel Sato', promise: 'Deliver Sato to Europa for hydrogen-storage inspection work.', date: currentIsoDate(), location: 'Europa', timeframe: 'Current voyage', status: 'Open', notes: 'Primary passenger delivery for the Europa stop.' },
-  { id: 'commit-refit-inspection', person: 'Toren Vask', promise: 'Provide time for a sustained-operation post-refit inspection.', date: currentIsoDate(), location: 'Europa', timeframe: 'Three-day layover', status: 'Watching', notes: 'Approximately 50 operating hours desired before full proof declaration.' },
-  { id: 'commit-renn-europa', person: 'Renn Harrow', promise: 'Allow evidence-led learning of Europa infrastructure and organizations without promising aid.', date: currentIsoDate(), location: 'Europa', timeframe: 'Three-day layover', status: 'Watching', notes: 'No aid commitments and no relief funds spent.' },
-  { id: 'commit-future-infrastructure', person: 'Johnathan Hales', promise: 'Build ordinary, non-spectacle infrastructure links where they help communities survive and operate.', date: currentIsoDate(), location: 'Carthage / Old Earth / Judaslands interface', timeframe: 'Long horizon', status: 'Deferred', notes: 'Relief should avoid dependency theater and make basic infrastructure normal.' },
-]
+const initialCommitments: CommitmentRecord[] = []
 
-const initialChronicle: ChronicleEntry[] = [
-  { id: 'chronicle-carthage-arrival', title: 'Carthage Arrival', stamp: Date.now() - 720000, source: 'NAV', status: 'Recorded', notes: 'The Intrepid entered the Carthage system after following ancient long-range human telemetry.' },
-  { id: 'chronicle-first-crew', title: 'First Full Crew Complement', stamp: Date.now() - 360000, source: 'CREW', status: 'Recorded', notes: 'Eight-person operating household established: Hales, Sennett, Vale, Vard, Vask, Vex, Bern, and Harrow.' },
-  { id: 'chronicle-first-commercial-contract', title: 'First Commercial Contract', stamp: Date.now() - 240000, source: 'JOBS', status: 'Recorded', notes: 'Helena-to-Ares critical medical transfer accepted.' },
-  { id: 'chronicle-first-medical-evacuation', title: 'First Medical Evacuation', stamp: Date.now() - 180000, source: 'MEDICAL', status: 'Recorded', notes: 'Two critical-care patients survived the Helena-to-Ares transfer.' },
-  { id: 'chronicle-first-ares-landing', title: 'First Ares Landing', stamp: Date.now() - 150000, source: 'NAV', status: 'Recorded', notes: 'Medical delivery, liberty, crew expansion, and refit port call completed.' },
-  { id: 'chronicle-first-major-refit', title: 'First Major Civilian Refit', stamp: Date.now() - 120000, source: 'ENGINEERING', status: 'Recorded', notes: 'Ares Meridian completed the 1,981,440 credit modernization.' },
-  { id: 'chronicle-abigail-online', title: 'ABIGAIL Mk VII Online', stamp: Date.now() - 90000, source: 'SHIPOS', status: 'Recorded', notes: 'Independent vessel intelligence entered supervised operations with hard authority limits.' },
-  { id: 'chronicle-renn-joins', title: 'Renn Joins the Crew', stamp: Date.now() - 70000, source: 'CREW', status: 'Recorded', notes: 'Renn Harrow converted from passenger to Survey & Field Liaison.' },
-  { id: 'chronicle-europa-run', title: 'Europa Run', stamp: Date.now() - 50000, source: 'NAV', status: 'Recorded', notes: 'Departed Ares for Europa with eight crew, seven passengers, and green ship status.' },
-  { id: 'chronicle-first-unknown-signal', title: 'First Unknown Signal Investigated', stamp: Date.now(), source: 'SURVEY', status: 'Pending', notes: 'No qualifying investigation logged yet.' },
-  { id: 'chronicle-100000km', title: '100,000 km Traveled', stamp: Date.now(), source: 'TELEMETRY', status: 'Pending', notes: 'Will become automatic once telemetry trail distance supports it.' },
-]
+const initialChronicle: ChronicleEntry[] = []
 
-const initialMedicalFacilities: MedicalFacilityRecord[] = [
-  { id: 'med-helena-transfer', name: 'Helena Medical Transfer Facility', locationId: 'loc-helena-medical-transfer', access: 'Heavy-vessel landing verified', capabilities: ['Emergency', 'Trauma', 'Stabilization', 'Industrial injury', 'Patient transfer'], travelNote: 'Historic origin facility for the first paid mission.', notes: 'Direct Intrepid pickup profile is verified.' },
-  { id: 'med-ares-receiving', name: 'Ares Receiving Facility', locationId: 'loc-body-ares', access: 'Critical-care receiving verified', capabilities: ['Emergency', 'Trauma', 'Surgery', 'Critical care'], travelNote: 'Both first-mission patients were delivered alive.', notes: 'Proven receiving contact.' },
-  { id: 'med-intrepid-clinic', name: 'DSV Intrepid Ship Clinic', locationId: 'ship-current-position', access: 'Shipboard / Medical authority', capabilities: ['Emergency', 'Trauma surgery', 'AutoSurgDoc', 'Recovery', 'Isolation', 'Advanced diagnostics', 'Cryogenic medicine', 'Independent emergency power'], travelNote: 'Aboard and unrestricted.', notes: 'Protected charts remain inaccessible to ABIGAIL without authorization.' },
-]
+const initialMedicalFacilities: MedicalFacilityRecord[] = []
 
-const initialSecurityIncidents: SecurityIncidentRecord[] = [
-  { id: 'incident-rejected-charter', title: 'Undisclosed outer-system charter declined', locationId: 'loc-station-asterion', confidence: 'CONFIRMED', permission: 'Shipboard', involved: ['Vale Orlan', 'Passenger Exchange'], outcome: 'Declined politely', notes: 'Location remains ordinary Asterion contact; the incident does not make Asterion hostile territory.' },
-  { id: 'incident-weapons-request', title: 'Passenger weapon access request declined', locationId: 'loc-station-asterion', confidence: 'CONFIRMED', permission: 'Shipboard', involved: ['Joren Kael'], outcome: 'Declined for first run', notes: 'Could reappear later. Track as incident, not location reputation.' },
-]
+const initialSecurityIncidents: SecurityIncidentRecord[] = []
 
-const initialStoresRecords: StoresRecord[] = [
-  { id: 'store-ice', item: 'Ice', quantity: 18400, unit: 'kg', storage: 'A1 resource bay', desiredMinimum: 12000, purchaseLocation: 'Asterion Orbital / hydrogen suppliers', lastPrice: 0, notes: 'Telemetry cargo percentage will eventually reconcile against stores.' },
-  { id: 'store-passenger-rations', item: 'Passenger provisions', quantity: 15, unit: 'person-days', storage: 'Upper cabins / galley stores', desiredMinimum: 30, purchaseLocation: 'Europa market', lastPrice: 0, notes: 'Current planning basis is 15 souls and all six passenger cabins occupied.' },
-  { id: 'store-coffee', item: 'Coffee', quantity: 6, unit: 'kg', storage: 'Galley dry stores', desiredMinimum: 8, purchaseLocation: 'Asterion dockside grocer', lastPrice: 0, notes: 'Supply Atlas candidate: good coffee matters on long legs.' },
-  { id: 'store-med-oxygen', item: 'Medical oxygen reserve', quantity: 2, unit: 'tanks', storage: 'Medical bay', desiredMinimum: 4, purchaseLocation: 'Ares / Europa medical supplier', lastPrice: 0, notes: 'Now backed by independent Medical emergency feeds and reserve power.' },
-  { id: 'store-fresh-produce', item: 'Fresh produce', quantity: 3, unit: 'crates', storage: 'Galley cold locker', desiredMinimum: 5, purchaseLocation: 'Helena agricultural market', lastPrice: 0, expiration: currentIsoDate(), notes: 'Track expiration and port price comparisons later.' },
-  { id: 'store-herb-wall', item: 'Modular hydroponic herb wall', quantity: 1, unit: 'installation', storage: 'Galley', desiredMinimum: 1, purchaseLocation: 'Installed aboard', lastPrice: 0, notes: 'Maintained by Luca Bern with Iria Vale.' },
-]
+const initialStoresRecords: StoresRecord[] = []
 
 const hairColorPresets = ['#1e1511', '#4d2f1c', '#77512d', '#b7834d', '#d8c3a2', '#121417', '#5b6069', '#8b2f24']
 const eyeColorPresets = ['#5b3a22', '#7a4f2a', '#3f6f54', '#2f6f8f', '#7088b8', '#9a7349', '#66736f']
@@ -1241,35 +1095,12 @@ const skinTonePresets = ['#f1c7a6', '#d7a379', '#b77956', '#8f563d', '#6f3f2e', 
 const metagameKinds: MetagameRecord['kind'][] = ['Character', 'Faction', 'Location', 'Mystery', 'Rumor', 'Contract', 'System Note']
 const metagameVisibilities: MetagameRecord['visibility'][] = ['Canon', 'GM-only', 'Rumor', 'Not Yet Established']
 
-const relayNetworks = [
-  'Asterion Orbital Traffic',
-  'Marshal Voss District Net',
-  'Local Flight Guild',
-  'Passenger Exchange',
-  'OldEarth Relay Network',
-  'Covenant Comms System',
-  'Independent Deep Space Beacons',
-]
+const relayNetworks = ['Local story channel', 'Personal log', 'Simulated hails']
 
-const reliefAuthorityBudget = 10000000
-const reliefVolunteerBreakdown = [
-  { specialty: 'Medical', count: 9 },
-  { specialty: 'Engineering / Infrastructure', count: 11 },
-  { specialty: 'Flight-qualified', count: 6 },
-  { specialty: 'Logistics', count: 4 },
-  { specialty: 'Agricultural', count: 3 },
-  { specialty: 'Security / Rescue', count: 5 },
-  { specialty: 'Unclassified Enthusiasts', count: 5 },
-]
-const reliefVolunteerVesselCount = 3
-const rennHarrowCrewProfile = {
-  name: 'Renn Harrow',
-  billet: 'Survey & Field Liaison',
-  rateMonthly: 2500,
-  credential: '90-day provisional Ares Civil Continuity liaison',
-  quarters: 'Private Deck A crew cabin',
-  authority: 'May recommend aid but cannot promise aid or funding. Secondary sensor and reconnaissance duties remain under Flight.',
-}
+const reliefAuthorityBudget = 0
+const reliefVolunteerBreakdown = [] as { name: string; count: number; type: string; role: string; specialty: string }[]
+const reliefVolunteerVesselCount = 0
+const rennHarrowCrewProfile = { name: 'Unassigned', billet: 'Unassigned', rateMonthly: 0, credential: 'Not entered', quarters: 'Not entered', authority: 'Add personnel and responsibilities for your own mission.' }
 
 const echoMailFolders: Array<{ id: EchoMailFolder; label: string }> = [
   { id: 'inbox', label: 'Inbox' },
@@ -1295,7 +1126,7 @@ const waveChannelOptions: Array<{ id: WaveChannel; label: string }> = [
 
 const createDefaultWaveDraft = (): WaveDraft => ({
   network: relayNetworks[0],
-  to: 'Asterion Traffic Control',
+  to: '',
   subject: '',
   body: '',
   crewTarget: '',
@@ -1304,39 +1135,26 @@ const createDefaultWaveDraft = (): WaveDraft => ({
   contactId: '',
 })
 
-const shipSystemRows = [
-  { name: 'Hull integrity', value: 98, note: 'Internal port-spine structure restored; exterior combat scar intentionally preserved' },
-  { name: 'Hydrogen reserve', value: 78, note: 'Fallback planning estimate until the next live telemetry packet' },
-  { name: 'Battery charge', value: 82, note: 'Fallback planning estimate until the next live telemetry packet' },
-  { name: 'Jump drive charge', value: 74, note: 'FTL-capable; live charge replaces this fallback when telemetry is present' },
-  { name: 'FTL readiness', value: 100, note: 'Solid-state isolation certified; Bridge, Engineering, and local disconnect retain authority' },
-  { name: 'Weapons status', value: 100, note: 'Military-derived systems operational; ABIGAIL cannot authorize or fire weapons' },
-  { name: 'Medical suite', value: 100, note: 'AutoSurgDoc, surgery, isolation, recovery, cryogenic support, and independent emergency power' },
-  { name: 'Passenger safety', value: 100, note: 'Emergency atmosphere and improved fire isolation installed' },
-  { name: 'Sensor package', value: 100, note: 'Enhanced passive, identification, geological, atmospheric, and survey capability' },
-]
+const shipSystemRows = [] as { name: string; value: number; note: string }[]
 
-const initialPosition: ShipCoordinate = { x: 42000, y: 142000, z: -98000 }
+const initialPosition: ShipCoordinate = { x: 0, y: 0, z: 0 }
 const mapScale = 1 / 56000
 const liveMapTargetRadius = 168
 const liveMapMinOuterRangeMeters = 35000
 const liveMapMaxOuterRangeMeters = 360000
 const liveMapReferenceFloorMeters = 180000
 const liveMapRangeRingsMeters = [4000, 8000, 25000, 100000, 250000]
-const mapLabelSizeMultiplier = 1.3
+const mapLabelSizeMultiplier = 2.0
 const defenseEnvelopeRingsMeters = [4000, 8000]
 const asteroidCautionEnvelopeMeters = 2000
 const contactEnvelopeRingsMeters = [4000]
 const masterAlarmAltitudeCautionMeters = 1000
 const masterAlarmCautionDurationMs = 5000
 const orbitLineSegments = 160
-const defaultBridgeEndpoint = '/shipos-bridge/telemetry/latest'
-const cloudBridgeEndpoint = '/api/shipos/telemetry/latest'
-const cloudBridgeHealthEndpoint = '/api/shipos/telemetry/health'
-const fallbackBridgeEndpoints = [
-  'http://127.0.0.1:8795/telemetry/latest',
-  'http://localhost:8795/telemetry/latest',
-]
+const defaultBridgeEndpoint = '/api/telemetry/latest'
+
+
+
 const telemetryHistoryLimit = 240
 const blueprintModelBlockLimit = 6000
 const currentShipContactId = 'ship-current-position'
@@ -1481,141 +1299,25 @@ const defaultShipOsDisplayPreferences: ShipOsDisplayPreferences = {
 
 const contactImageStorageSoftLimit = 2_400_000
 const contactImageLibraryLimit = 32
-const shipOsStateChangedEvent = 'shipos:state-changed'
-const shipOsStateHydratedEvent = 'shipos:state-hydrated'
+
+
 const shipOsPersistenceErrorEvent = 'shipos:persistence-error'
-const shipOsRemoteRevisionKey = 'shipos-sync-remote-revision'
-const shipOsRemoteUpdatedAtKey = 'shipos-sync-remote-updated-at'
-const shipOsLocalDirtyAtKey = 'shipos-sync-local-dirty-at'
-const shipOsLocalOnlyStateKeys = new Set([
-  'shipos-current-position',
-  'shipos-last-telemetry-packet',
-  'shipos-telemetry-history',
-  'shipos-contact-memory',
-  'shipos-contact-memory-visible',
-  'shipos-bridge-config',
-  'shipos-display-preferences',
-  'shipos-alarm-sound-uplink-enabled',
-])
 
-function isShipOsSynchronizedStateKey(key: string) {
-  return key.startsWith('shipos-')
-    && !key.startsWith('shipos-sync-')
-    && !shipOsLocalOnlyStateKeys.has(key)
-}
 
-function collectShipOsLocalState(includeLocalOnly = false) {
-  const state: Record<string, unknown> = {}
-  for (let index = 0; index < window.localStorage.length; index += 1) {
-    const key = window.localStorage.key(index)
-    if (!key?.startsWith('shipos-') || key.startsWith('shipos-sync-') || (!includeLocalOnly && !isShipOsSynchronizedStateKey(key))) continue
-    const raw = window.localStorage.getItem(key)
-    if (raw === null) continue
-    try {
-      state[key] = JSON.parse(raw) as unknown
-    } catch {
-      state[key] = raw
-    }
-  }
-  return state
-}
 
-function applyShipOsRemoteState(state: Record<string, unknown>) {
-  const remoteEntries = Object.entries(state).filter(([key]) => isShipOsSynchronizedStateKey(key))
-  const remoteKeys = new Set(remoteEntries.map(([key]) => key))
-  const localKeys = Array.from({ length: window.localStorage.length }, (_, index) => window.localStorage.key(index))
-    .filter((key): key is string => Boolean(key))
-  const changedKeys = new Set<string>()
 
-  localKeys.forEach((key) => {
-    if (!isShipOsSynchronizedStateKey(key) || remoteKeys.has(key)) return
-    window.localStorage.removeItem(key)
-    changedKeys.add(key)
-  })
 
-  remoteEntries.forEach(([key, value]) => {
-    const serialized = JSON.stringify(value)
-    if (window.localStorage.getItem(key) === serialized) return
-    window.localStorage.setItem(key, serialized)
-    changedKeys.add(key)
-  })
 
-  return [...changedKeys]
-}
 
-function applyShipOsBackupState(state: Record<string, unknown>) {
-  Object.entries(state).forEach(([key, value]) => {
-    if (!key.startsWith('shipos-') || key.startsWith('shipos-sync-')) return
-    window.localStorage.setItem(key, JSON.stringify(value))
-  })
-}
 
-function shipOsStateSignature(state: Record<string, unknown>) {
-  return JSON.stringify(Object.keys(state).sort().map((key) => [key, state[key]]))
-}
 
-function usePersistentState<T>(key: string, initialValue: T) {
-  const didMountRef = useRef(false)
-  const initialValueRef = useRef(initialValue)
-  const valueRef = useRef<T>(initialValue)
-  const suppressNextChangeRef = useRef(false)
-  const [value, setValue] = useState<T>(() => {
-    if (typeof window === 'undefined') return initialValue
-    const raw = window.localStorage.getItem(key)
-    if (!raw) return initialValue
-    try {
-      return JSON.parse(raw) as T
-    } catch {
-      return initialValue
-    }
-  })
 
-  valueRef.current = value
 
-  useEffect(() => {
-    const hydrateValue = (event: Event) => {
-      const keys = (event as CustomEvent<{ keys?: string[] }>).detail?.keys
-      if (keys && !keys.includes(key)) return
 
-      const raw = window.localStorage.getItem(key)
-      let nextValue = initialValueRef.current
-      if (raw) {
-        try {
-          nextValue = JSON.parse(raw) as T
-        } catch {
-          nextValue = initialValueRef.current
-        }
-      }
 
-      if (JSON.stringify(valueRef.current) === JSON.stringify(nextValue)) return
-      suppressNextChangeRef.current = true
-      valueRef.current = nextValue
-      setValue(nextValue)
-    }
 
-    window.addEventListener(shipOsStateHydratedEvent, hydrateValue)
-    return () => window.removeEventListener(shipOsStateHydratedEvent, hydrateValue)
-  }, [key])
 
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(key, JSON.stringify(value))
-      const suppressChange = suppressNextChangeRef.current
-      suppressNextChangeRef.current = false
-      if (didMountRef.current && !suppressChange && !shipOsLocalOnlyStateKeys.has(key)) {
-        const changedAt = Date.now()
-        window.localStorage.setItem(shipOsLocalDirtyAtKey, String(changedAt))
-        window.dispatchEvent(new CustomEvent(shipOsStateChangedEvent, { detail: { key, changedAt } }))
-      }
-      didMountRef.current = true
-    } catch (error) {
-      console.warn(`ShipOS could not persist ${key}.`, error)
-      window.dispatchEvent(new CustomEvent(shipOsPersistenceErrorEvent, { detail: { key } }))
-    }
-  }, [key, value])
 
-  return [value, setValue] as const
-}
 
 function createDefaultContactFilters(): ContactFilterState {
   return {
@@ -1648,14 +1350,7 @@ function normalizeContactFilters(filters?: Partial<ContactFilterState> | null, f
   return { classes, iff, factions }
 }
 
-function upsertRecords<T extends { id: string }>(current: T[], canonical: T[], retiredIds: string[] = []) {
-  const canonicalIds = new Set(canonical.map((item) => item.id))
-  const retired = new Set(retiredIds)
-  return [
-    ...canonical,
-    ...current.filter((item) => !canonicalIds.has(item.id) && !retired.has(item.id)),
-  ]
-}
+
 
 function formatCoord(value: number) {
   return Math.round(value).toLocaleString()
@@ -1854,15 +1549,9 @@ function inferContactFactionName(contact: ShipContact) {
     relationship,
   ].map((value) => String(value || '')).join(' ').toLowerCase()
 
-  if (contact.id === currentShipContactId || relationship === 'owned' || /\bowned\b/.test(haystack)) return 'DSV Intrepid'
+  if (contact.id === currentShipContactId || relationship === 'owned' || /\bowned\b/.test(haystack)) return 'Local player'
   if (contact.kind === 'body') return ''
-  if (haystack.includes('asterion')) return 'Asterion Orbital Traffic'
   if (haystack.includes('helena medical')) return 'Helena Medical Authority'
-  if (haystack.includes('passenger exchange')) return 'Passenger Exchange'
-  if (haystack.includes('covenant')) return 'Covenant Comms System'
-  if (haystack.includes('oldearth') || haystack.includes('old earth')) return 'OldEarth Relay Network'
-  if (haystack.includes('marshal voss')) return 'Marshal Voss District Net'
-  if (haystack.includes('flight guild')) return 'Local Flight Guild'
   if (/\b(civilian|commercial|merchant|independent)\b/.test(haystack)) return 'Independent Civilian Traffic'
   return ''
 }
@@ -1894,7 +1583,7 @@ function createContactFactionOptions(
     options.set(key, { id: factionFilterIdForName(clean), label: clean, source })
   }
 
-  addOption('DSV Intrepid', 'Ownship')
+  addOption('Local player', 'Ownship')
   relayNetworks.forEach((name) => addOption(name, 'Comms network'))
   addOption('Independent Civilian Traffic', 'Default faction')
   metagameRecords
@@ -2145,7 +1834,7 @@ function coordinateFromTelemetry(packet: TelemetryPacket): ShipCoordinate | null
 
 function createTelemetrySample(packet: TelemetryPacket, importedBy: TelemetrySample['importedBy']): TelemetrySample {
   return {
-    ...packet,
+    ...playerTrailPacket(packet),
     id: packet.packetId || `telemetry-${Date.now()}-${Math.round(Math.random() * 10000)}`,
     receivedAt: Date.now(),
     importedBy,
@@ -2605,10 +2294,10 @@ function ShipFlightDirector({
       : `${(reading.timeToSurfaceSeconds / 60).toFixed(1)} min`
 
   return (
-    <section className={`shipOsFlightDirector shipOsFlightDirector-${directorState}`} aria-label="Intrepid planetary flight director">
+    <section className={`shipOsFlightDirector shipOsFlightDirector-${directorState}`} aria-label="Focused subject planetary flight director">
       <header>
         <div>
-          <span>Intrepid Flight Director</span>
+          <span>{packet?.ship || 'Player'} · Flight Director</span>
           <strong>{directorStatus}</strong>
         </div>
         <small>{reading.surfaceAltitude === null ? 'Awaiting controller elevation telemetry' : `${reading.body.name} gravity reference / ${packet?.source || 'telemetry'}`}</small>
@@ -2641,7 +2330,7 @@ function ShipFlightDirector({
         </dl>
       </div>
       <ShipTerrainScan packet={packet} surfaceAltitude={reading.surfaceAltitude} />
-      <p>Radar altitude is the game HUD surface elevation from the active cockpit or remote control. Time-to-terrain is a straight-line closure estimate, not an autopilot or terrain-following guarantee.</p>
+      <p>Surface altitude is reported for the selected subject: cockpit elevation for the player in a seat, character position on foot, or grid origin for a tagged grid. Grid altitude is not hull clearance. Time-to-terrain is a straight-line estimate, not an autopilot guarantee.</p>
     </section>
   )
 }
@@ -2702,35 +2391,11 @@ function normalizeBridgePollSeconds(value?: number) {
   return Math.max(2, Math.min(120, Math.round(parsed)))
 }
 
-function bridgeHealthEndpoint(endpoint: string) {
-  if (endpoint.startsWith('/api/shipos/telemetry')) return cloudBridgeHealthEndpoint
-  if (endpoint.startsWith('/shipos-bridge/')) return '/shipos-bridge/health'
-  try {
-    const url = new URL(endpoint)
-    url.pathname = '/health'
-    url.search = ''
-    url.hash = ''
-    return url.toString()
-  } catch {
-    return 'http://127.0.0.1:8795/health'
-  }
-}
 
-function bridgeTelemetryEndpointFromHealth(endpoint: string) {
-  if (endpoint.startsWith('/api/shipos/telemetry')) return cloudBridgeEndpoint
-  if (endpoint.startsWith('/shipos-bridge/')) return defaultBridgeEndpoint
-  try {
-    const url = new URL(endpoint)
-    url.pathname = '/telemetry/latest'
-    url.search = ''
-    url.hash = ''
-    return url.toString()
-  } catch {
-    return defaultBridgeEndpoint
-  }
-}
 
-async function fetchJsonWithTimeout(endpoint: string, accessToken = '', timeoutMs = 8000) {
+function bridgeTelemetryEndpointFromHealth() { return defaultBridgeEndpoint }
+
+async function fetchJsonWithTimeout(endpoint: string, timeoutMs = 8000) {
   const abortController = new AbortController()
   const timeout = window.setTimeout(() => abortController.abort(), timeoutMs)
   try {
@@ -2738,7 +2403,6 @@ async function fetchJsonWithTimeout(endpoint: string, accessToken = '', timeoutM
       cache: 'no-store',
       headers: {
         Accept: 'application/json',
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
       mode: 'cors',
       signal: abortController.signal,
@@ -2750,14 +2414,7 @@ async function fetchJsonWithTimeout(endpoint: string, accessToken = '', timeoutM
   }
 }
 
-function bridgeEndpointCandidates(endpoint: string, health = false) {
-  const configuredEndpoint = endpoint.trim()
-  const candidates = configuredEndpoint.startsWith('/api/shipos/telemetry')
-    ? [configuredEndpoint]
-    : [configuredEndpoint, ...fallbackBridgeEndpoints].filter(Boolean)
-  const unique = Array.from(new Set(candidates))
-  return health ? unique.map(bridgeHealthEndpoint) : unique
-}
+function bridgeEndpointCandidates(_endpoint: string, health = false) { return [health ? '/api/status' : defaultBridgeEndpoint] }
 
 function telemetryPacketAge(stamp?: string) {
   if (!stamp) return null
@@ -2781,28 +2438,19 @@ function telemetryPacketAgeLabel(stamp?: string) {
 
 function bridgePacketStatus(stamp: string | undefined, didImport: boolean) {
   const age = telemetryPacketAge(stamp)
-  if (age !== null && age > 30000) return 'Relay online, game packet stale'
+  if (age !== null && age > 30000) return 'Game packet stale — last known position'
   return didImport ? 'Live packet received' : 'Bridge steady, no new packet'
 }
 
-function bridgeFetchErrorMessage(error: unknown, endpoint: string) {
-  if (error instanceof DOMException && error.name === 'AbortError') return `Bridge request timed out at ${endpoint}.`
-  if (error instanceof TypeError) {
-    return endpoint.startsWith('/api/shipos/telemetry')
-      ? 'Browser could not reach the EchoBoard telemetry relay.'
-      : `Browser could not load ${endpoint}. Local endpoints work on the Space Engineers PC; other devices should use the EchoBoard relay.`
-  }
-  if (error instanceof Error) return error.message
-  return `Bridge request failed at ${endpoint}.`
-}
+function bridgeFetchErrorMessage(error: unknown, _endpoint: string) { return error instanceof Error ? error.message : 'Local telemetry is unavailable. Check the helper on the gaming PC.' }
 
-async function fetchBridgeWithFallback(endpoint: string, health = false, accessToken = '') {
+async function fetchBridgeWithFallback(endpoint: string, health = false) {
   const attempts: string[] = []
   for (const candidate of bridgeEndpointCandidates(endpoint, health)) {
     try {
       return {
         endpoint: candidate,
-        payload: await fetchJsonWithTimeout(candidate, accessToken),
+        payload: await fetchJsonWithTimeout(candidate),
         attempts,
       }
     } catch (error) {
@@ -2916,14 +2564,7 @@ function linkedEntityIdsForJob(job: JobRecord, entities: DirectoryEntity[]) {
     .map((entity) => entity.id)
 }
 
-function createDefaultNavigationPlan(): NavigationPlanDraft {
-  return {
-    destinationId: 'body-europa',
-    cruiseSpeed: '100',
-    fuelReserve: '30',
-    notes: 'Ares -> Europa. Three-day layover for Sato delivery, post-refit inspection, liberty, local familiarization, and ordinary commercial work; Pelagos follows.',
-  }
-}
+function createDefaultNavigationPlan(): NavigationPlanDraft { return { destinationId: '', cruiseSpeed: '100', fuelReserve: '30', notes: '' } }
 
 function createDefaultBridgeConfig(): BridgeConfig {
   return {
@@ -3672,7 +3313,7 @@ function createDefaultJobDraft(): JobDraft {
   return {
     title: '',
     client: 'Passenger Exchange',
-    route: 'Asterion Orbital ->',
+    route: '',
     destination: '',
     status: 'Prospect',
     payout: '',
@@ -3719,7 +3360,7 @@ function createDefaultPassengerDraft(jobId = holdingJobId): PassengerDraft {
     jobId,
     name: '',
     manifestId: '',
-    origin: 'Asterion Orbital',
+    origin: '',
     destination: '',
     cabin: 'Unassigned cabin',
     fare: '',
@@ -3762,7 +3403,7 @@ function passengerFileFromDraft(draft: PassengerDraft, existing?: PassengerFile)
     jobId: draft.jobId || holdingJobId,
     name: draft.name.trim(),
     manifestId: draft.manifestId.trim() || `PAX-${Math.round(Math.random() * 900000 + 100000)}`,
-    origin: draft.origin.trim() || 'Asterion Orbital',
+    origin: draft.origin.trim() || '',
     destination,
     cabin: draft.cabin.trim() || 'Unassigned cabin',
     fare: Number.isFinite(fare) ? fare : 0,
@@ -4776,15 +4417,17 @@ function disposeMaterial(material?: THREE.Material | THREE.Material[]) {
 function createBodyLabel(text: string, color: string, selected: boolean) {
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
-  canvas.width = 512
+  const labelText = text.length > 60 ? text.slice(0, 59) + '…' : text
+  if (context) context.font = '900 46px "IBM Plex Mono", "Share Tech Mono", monospace'
+  canvas.width = Math.max(512, Math.ceil(context?.measureText(labelText).width ?? 480) + 40)
   canvas.height = 128
   if (context) {
     context.clearRect(0, 0, canvas.width, canvas.height)
     context.fillStyle = 'rgba(2, 7, 9, 0.82)'
-    context.fillRect(92, 18, 328, 66)
+    context.fillRect(8, 18, canvas.width - 16, 66)
     context.strokeStyle = color
     context.globalAlpha = selected ? 0.82 : 0.58
-    context.strokeRect(92, 18, 328, 66)
+    context.strokeRect(8, 18, canvas.width - 16, 66)
     context.globalAlpha = 1
     context.font = '900 46px "IBM Plex Mono", "Share Tech Mono", monospace'
     context.textAlign = 'center'
@@ -4792,7 +4435,7 @@ function createBodyLabel(text: string, color: string, selected: boolean) {
     context.shadowColor = color
     context.shadowBlur = selected ? 18 : 10
     context.fillStyle = selected ? '#fff4d8' : '#f4eadb'
-    context.fillText(text, canvas.width / 2, 58)
+    context.fillText(labelText, canvas.width / 2, 58)
     context.shadowBlur = 0
     context.strokeStyle = color
     context.globalAlpha = selected ? 0.92 : 0.54
@@ -4811,6 +4454,8 @@ function createBodyLabel(text: string, color: string, selected: boolean) {
     transparent: true,
   })
   const sprite = new THREE.Sprite(material)
+  sprite.userData.labelAspectMultiplier = canvas.width / 512
+  sprite.userData.labelPriority = selected ? 2 : 1
   sprite.scale.set(17, 4.25, 1)
   sprite.renderOrder = 10
   return sprite
@@ -4878,7 +4523,7 @@ function setMapLabelScale(
   maxZoomScale = 1.16,
   referenceDistance = 150,
 ) {
-  const scaledWidth = width * mapLabelSizeMultiplier
+  const scaledWidth = width * mapLabelSizeMultiplier * (Number(label.userData.labelAspectMultiplier) || 1)
   const scaledHeight = height * mapLabelSizeMultiplier
   label.scale.set(scaledWidth, scaledHeight, 1)
   label.userData.baseLabelScale = { x: scaledWidth, y: scaledHeight }
@@ -4886,15 +4531,46 @@ function setMapLabelScale(
   label.userData.labelScaleReferenceDistance = referenceDistance
 }
 
-function updateMapLabelZoomScale(root: THREE.Object3D, camera: THREE.Camera, target: THREE.Vector3) {
+function updateMapLabelZoomScale(root: THREE.Object3D, camera: THREE.Camera, target: THREE.Vector3, viewportHeight = 600) {
   const distance = camera.position.distanceTo(target)
+  const labels: THREE.Object3D[] = []
   root.traverse((object) => {
+    if (object.userData.baseLabelScale) labels.push(object)
+  })
+  const occupied: { x: number; y: number; width: number; height: number }[] = []
+  const cameraUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion)
+  labels.sort((a, b) => (b.userData.labelPriority || 0) - (a.userData.labelPriority || 0))
+  labels.forEach((object) => {
     const baseScale = object.userData.baseLabelScale as { x: number; y: number } | undefined
     if (!baseScale) return
+    object.userData.labelAnchor ??= object.position.clone()
+    object.position.copy(object.userData.labelAnchor)
     const limits = object.userData.labelScaleLimits as { min: number; max: number } | undefined
     const referenceDistance = Number(object.userData.labelScaleReferenceDistance) || 150
     const zoomScale = clampNumber(distance / referenceDistance, limits?.min ?? 0.34, limits?.max ?? 1.16)
-    object.scale.set(baseScale.x * zoomScale, baseScale.y * zoomScale, 1)
+    // Keep glyphs readable (~14 CSS pixels minimum) even when zoomed out on a tablet.
+    let height = baseScale.y * zoomScale
+    let unitsPerPixel = 0
+    if (camera instanceof THREE.PerspectiveCamera) {
+      const depth = object.getWorldPosition(new THREE.Vector3()).sub(camera.position).dot(camera.getWorldDirection(new THREE.Vector3()))
+      unitsPerPixel = 2 * Math.max(0, depth) * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / Math.max(1, viewportHeight)
+      height = Math.max(height, unitsPerPixel * 40)
+    }
+    object.scale.set(height * baseScale.x / baseScale.y, height, 1)
+    if (unitsPerPixel <= 0 || !(camera instanceof THREE.PerspectiveCamera)) return
+    const worldAnchor = object.getWorldPosition(new THREE.Vector3())
+    const screen = worldAnchor.clone().project(camera)
+    if (screen.z < -1 || screen.z > 1) return
+    const rect = { x: (screen.x + 1) * viewportHeight * camera.aspect / 2, y: (1 - screen.y) * viewportHeight / 2, width: object.scale.x / unitsPerPixel, height: height / unitsPerPixel * 0.6 }
+    const originalY = rect.y
+    for (let step = 0; step < 16; step++) {
+      if (!occupied.some(other => Math.abs(rect.x - other.x) < (rect.width + other.width) / 2 + 4 && Math.abs(rect.y - other.y) < (rect.height + other.height) / 2 + 4)) break
+      const offset = Math.ceil((step + 1) / 2) * (rect.height + 6)
+      rect.y = originalY + (step % 2 === 0 ? -offset : offset)
+    }
+    occupied.push(rect)
+    const shifted = worldAnchor.addScaledVector(cameraUp, (originalY - rect.y) * unitsPerPixel)
+    object.position.copy(object.parent ? object.parent.worldToLocal(shifted) : shifted)
   })
 }
 
@@ -5001,214 +4677,13 @@ function focusMapCameraOn(camera: THREE.PerspectiveCamera, controls: OrbitContro
   controls.update()
 }
 
-function createInitialWaves(): Wave[] {
-  const now = Date.now()
-  return [
-    {
-      id: 'wave-seed-meridian-final-invoice',
-      direction: 'incoming',
-      network: 'Independent Deep Space Beacons',
-      from: 'Ares Meridian Naval Works',
-      to: shipName,
-      subject: 'Final refit invoice and certification',
-      body: 'Final invoice: 1,981,440 credits against a 2,000,000 credit authorization ceiling. Localized dampening certification: PASS. Major refit package released for unrestricted operation.',
-      createdAt: now - 420000,
-      status: 'received',
-      priority: 'priority',
-      channel: 'ship-to-shore',
-      contactName: 'Ares Meridian Naval Works',
-      feesCredits: 1981440,
-    },
-    {
-      id: 'wave-seed-continuity-credential',
-      direction: 'incoming',
-      network: 'Independent Deep Space Beacons',
-      from: 'Ares Civil Continuity Network',
-      to: 'Renn Harrow',
-      subject: 'Provisional liaison credential',
-      body: 'Renn Harrow is recognized for 90 days as a provisional liaison. This provides information and introductions only; it conveys no authority to commit Ares, Intrepid resources, aid, or funding.',
-      createdAt: now - 300000,
-      status: 'received',
-      crewTarget: 'Renn Harrow',
-      priority: 'routine',
-      channel: 'wave',
-    },
-    {
-      id: 'wave-seed-europa-manifest-lock',
-      direction: 'incoming',
-      network: 'Passenger Exchange',
-      from: 'Mara Sennett',
-      to: shipName,
-      subject: 'Europa and Pelagos manifest lock',
-      body: 'Manifest locked at 15 souls: eight crew and seven passengers. All six passenger cabins occupied. Sato disembarks Europa; Derrin Sol, Talia Or, Elias and Juno Marr, and Nadia Kess continue toward Pelagos.',
-      createdAt: now - 220000,
-      status: 'received',
-      crewTarget: 'Mara Sennett',
-      priority: 'routine',
-      channel: 'wave',
-    },
-    {
-      id: 'wave-seed-refit-proving-order',
-      direction: 'incoming',
-      network: 'Independent Deep Space Beacons',
-      from: 'Toren Vask / Engineering',
-      to: shipName,
-      subject: 'Post-refit proving watch',
-      body: 'Zero grounding squawks. Four open and six watch items do not affect operations. Engineering requests approximately 50 operating hours before declaring the entire Meridian refit fully proven.',
-      createdAt: now - 160000,
-      status: 'received',
-      crewTarget: 'Toren Vask',
-      priority: 'priority',
-      channel: 'wave',
-    },
-    {
-      id: 'wave-seed-relay-e17-prospect',
-      direction: 'incoming',
-      network: 'Independent Deep Space Beacons',
-      from: 'Europa contract exchange',
-      to: shipName,
-      subject: 'Relay E-17 overdue maintenance posting',
-      body: 'Automated navigation relay E-17 is advertising overdue maintenance. This posting remains a prospect only. No acceptance, dispatch, rescue obligation, or aid commitment has been recorded.',
-      createdAt: now - 90000,
-      status: 'received',
-      priority: 'routine',
-      channel: 'ship-to-shore',
-      contactName: 'Relay E-17',
-    },
-  ]
-}
+function createInitialWaves(): Wave[] { return [] }
 
-function createInitialLogs(): ShipLog[] {
-  const now = Date.now()
-  const captainLogs: Array<[string, string]> = [
-    ['001 - Leaving', 'Hales left Covenant service after twelve years, received the Intrepid from Edicarus, operated alone for three weeks, and followed an old signal toward Carthage.'],
-    ['002 - Asterion', 'After twelve weeks from Lunar Transit Station 34-A, Intrepid found Carthage alive, contacted Marshal Elara Voss, docked at Asterion, and began looking for crew and work.'],
-    ['003 - Mara', 'Mara Sennett became First Officer at 3,000 credits monthly with authority to run the business and challenge command.'],
-    ['004 - Crew', 'Kessa, Selene, Toren, Garran, Luca, and eventually Renn joined Hales and Mara. What began as hiring became an eight-person household.'],
-    ['005 - Medical', 'The empty medical compartment became an advanced clinic. The first real contract was a 118,000 credit Helena-to-Ares transfer for two critical patients.'],
-    ['006 - First Passengers', 'Iria, Derrin, Mother Calen, Renn, Lysa, Tomas, and Sera taught the Intrepid how to operate as a passenger ship.'],
-    ['007 - Helena', 'Every department supported the patient-safe Helena pickup and nineteen-hour non-FTL passage. Both patients reached Ares alive.'],
-    ['008 - Father', 'Edicarus created a 10,000,000 credit provisional relief authority, gathered 43 volunteers and three interested ships, and ordered that nobody move before need was verified.'],
-    ['009 - Ares', 'The patients survived, the client paid, liberty was taken, and the first mission closed without death, violence, or ship damage.'],
-    ['010 - The Scar', 'Meridian restored the old port-spine combat wound internally while preserving the reinforced exterior scar as a command reminder.'],
-    ['011 - Refit', 'The 1,981,440 credit Meridian package delivered dampening, FTL isolation, actuators, redundancy, Medical power, passenger safety, Mission Bay utilities, sensors, and ABIGAIL.'],
-    ['012 - ABIGAIL', 'ABIGAIL Mk VII entered supervised operations with clear Flight, Engineering, Tactical, FTL, and Medical boundaries plus a physical Isolation Control.'],
-    ['013 - ShipOS', 'Department requests transformed ShipOS into institutional memory under Mara\'s rule: one truth, multiple views.'],
-    ['014 - Renn', 'Renn moved from passenger to Survey & Field Liaison at 2,500 credits monthly, responsible for finding evidence and saying when help is not needed.'],
-    ['015 - The Intrepid as Home', 'Hales recalled the bridge blanket that first made Intrepid feel like home and accepted that one person can survive aboard, but a crew makes a life.'],
-    ['016 - Why Mara Came', 'Mara stayed because Intrepid felt like the beginning of something and because Hales treated the ship as a home rather than collateral.'],
-    ['017 - Ares Continuity', 'Ares Civil Continuity connected Renn to a 90-day provisional liaison credential carrying contacts and information but no commitment authority.'],
-    ['018 - Just Help', 'Hales defined the endeavor plainly: this family keeps helping, with evidence and dignity rather than spectacle.'],
-    ['019 - Do Not Become the Mission', 'The crew adopted doctrine that Intrepid must remain a home, not become an exhausted relief warehouse where every person and flight is an emergency.'],
-    ['020 - Nadia Kess', 'Nadia boarded at Ares as a paid Pelagos passenger, investigative journalist, and independent observer interested in infrastructure, institutions, and Hales.'],
-    ['021 - The Comms Room', 'Hales showed Nadia the old sleeping cubby and preserved scar; she observed that he speaks of Intrepid as though they survived each other.'],
-    ['022 - Dinner', 'Hales invited Nadia to a private, off-record dinner in his quarters. She arrived without a recorder and the evening remained personal.'],
-    ['023 - Father', 'A story about Edicarus reinforced the principle that dignity begins by letting people say what they need. Nadia suggested becoming someone safe to ask.'],
-    ['024 - Scraps', 'Nadia challenged Hales to distinguish between fights nobody will take, fights that are not his, and resistance he has failed to recognize.'],
-    ['025 - The Interview', 'Nadia sees a household-based institution built around distributed authority and trust, while watching carefully for cult-of-personality risk.'],
-    ['026 - Who Am I?', 'Nadia separated who Hales is from what he is for and pointed to choices made without duty, rescue, or command as a possible answer.'],
-    ['027 - Nadia', 'The dinner ended without forcing a definition. The next morning was outwardly normal, with an acknowledged but deliberately undefined connection.'],
-    ['028 - Europa Run', 'Intrepid departed Ares for Europa with eight crew, seven passengers, ABIGAIL online, a healthy ship, and a three-day layover planned before Pelagos.'],
-    ['029 - Current Orders', 'Reach Europa safely, deliver passengers, inspect the refit, let Renn learn without promises, take liberty, find useful work, protect profitability, and remember Intrepid is home.'],
-    ['030 - Intrepid', 'The voyage began with one man, money, weapons, empty cabins, and no plan. It now carries eight crew and fifteen souls toward Europa, and Hales knows where home is.'],
-  ]
-  return captainLogs.map(([title, entry], index) => ({
-    id: `log-seed-captain-${String(index + 1).padStart(3, '0')}`,
-    stamp: now - ((captainLogs.length - index) * 60000),
-    system: 'CAPTAIN',
-    entry: `${title}: ${entry}`,
-  }))
-}
+function createInitialLogs(): ShipLog[] { return [] }
 
-function createInitialBankEntries(): BankEntry[] {
-  const today = currentIsoDate()
-  return [
-    {
-      id: 'bank-seed-operating-account',
-      date: today,
-      kind: 'income',
-      vendor: 'Hales operating account',
-      category: 'Operating Capital',
-      amount: operatingAccountInitialCredits,
-      recurring: false,
-      notes: 'Dedicated Intrepid venture operating account.',
-    },
-    {
-      id: 'bank-seed-mara-upfront',
-      date: today,
-      kind: 'expense',
-      vendor: 'Mara Sennett',
-      category: 'Payroll',
-      amount: 6000,
-      recurring: false,
-      notes: 'Two months First Officer salary paid upfront.',
-    },
-    {
-      id: 'bank-seed-mara-monthly',
-      date: today,
-      kind: 'expense',
-      vendor: 'Mara Sennett',
-      category: 'Recurring Payroll',
-      amount: 3000,
-      recurring: true,
-      notes: 'Monthly First Officer compensation.',
-    },
-    {
-      id: 'bank-seed-core-crew-upfront',
-      date: today,
-      kind: 'expense',
-      vendor: 'Kessa / Selene / Toren / Garran / Luca',
-      category: 'Payroll',
-      amount: 25000,
-      recurring: false,
-      notes: 'Two months upfront for five active specialists at 5,000 credits each.',
-    },
-    {
-      id: 'bank-seed-core-crew-monthly',
-      date: today,
-      kind: 'expense',
-      vendor: 'Crew specialist payroll',
-      category: 'Recurring Payroll',
-      amount: 15000,
-      recurring: true,
-      notes: 'Kessa, Selene, Toren, Garran, Luca, and Renn at 2,500 credits/month each.',
-    },
-    {
-      id: 'bank-seed-medical-conversion',
-      date: today,
-      kind: 'expense',
-      vendor: 'Asterion medical contractors',
-      category: 'Completed Medical Conversion',
-      amount: 276000,
-      recurring: false,
-      notes: 'Historic completed shipboard clinic, trauma OR, AutoSurgDoc, recovery, isolation, advanced diagnostics, and cryogenic capability.',
-    },
-    {
-      id: 'bank-seed-meridian-refit',
-      date: today,
-      kind: 'expense',
-      vendor: 'Ares Meridian Naval Works',
-      category: 'Major Civilian Refit',
-      amount: 1981440,
-      recurring: false,
-      notes: 'Final paid cost against a 2,000,000 credit authorization ceiling.',
-    },
-    {
-      id: 'bank-seed-medical-contract-paid',
-      date: today,
-      kind: 'income',
-      vendor: 'Helena Medical Authority',
-      category: 'Completed Contract Revenue',
-      amount: 118000,
-      recurring: false,
-      notes: 'First paid mission completed. Fuel reimbursement is not included in this line.',
-    },
-  ]
-}
+function createInitialBankEntries(): BankEntry[] { return [] }
 
-function randomItem<T>(items: T[]) {
-  return items[Math.floor(Math.random() * items.length)]
-}
+
 
 function normalizeWaveChannel(wave: Pick<Wave, 'channel'>): WaveChannel {
   return wave.channel ?? 'wave'
@@ -5334,13 +4809,6 @@ function dockingFeeForWave(wave: Wave) {
 function relayNetworkForContact(contact: ShipContact) {
   const faction = contactFactionName(contact)
   if (relayNetworks.includes(faction)) return faction
-  const haystack = `${contact.name} ${contact.className} ${contact.status} ${contact.notes} ${faction}`.toLowerCase()
-  if (haystack.includes('asterion') || haystack.includes('helena')) return 'Asterion Orbital Traffic'
-  if (haystack.includes('passenger')) return 'Passenger Exchange'
-  if (haystack.includes('marshal')) return 'Marshal Voss District Net'
-  if (haystack.includes('guild')) return 'Local Flight Guild'
-  if (haystack.includes('covenant')) return 'Covenant Comms System'
-  if (haystack.includes('oldearth') || haystack.includes('old earth')) return 'OldEarth Relay Network'
   return relayNetworks[0]
 }
 
@@ -5390,9 +4858,9 @@ function createHailDraftForContact(contact: ShipContact, currentPosition: ShipCo
     subject: `Hail: ${title} ${purpose}`,
     body: [
       `${shipName} to ${recipientForHailTarget(contact)}.`,
-      `Requesting ${purpose} for DSV Intrepid.`,
+      `Requesting ${purpose} for Local player.`,
       `Current GPS ${formatCoord(currentPosition.x)}:${formatCoord(currentPosition.y)}:${formatCoord(currentPosition.z)}; contact range ${formatKm(distance)}.`,
-      'Registry: independent DSV Intrepid. Current declared profile: medical transfer / civilian passenger operations.',
+      'Fictional hail draft. Enter your identity and purpose; no game transmission will be sent.',
       'Please advise approach corridor, pad or berth assignment, local fees, transponder requirements, and any weapons-safe or customs constraints.',
     ].join(' '),
     crewTarget: '',
@@ -5402,104 +4870,9 @@ function createHailDraftForContact(contact: ShipContact, currentPosition: ShipCo
   }
 }
 
-function generateRelayReply(wave: Wave): Wave {
-  const channel = normalizeWaveChannel(wave)
-  if (isHailChannel(channel)) {
-    const fee = dockingFeeForWave(wave)
-    const hash = hashString(`${wave.id}-${wave.subject}-${wave.to}`)
-    const corridor = ['Blue Five', 'Copper Two', 'Green Nine', 'Amber Three', 'White Seven'][hash % 5]
-    const hold = ['10 km high gate', 'outer beacon stack', 'ring shadow lane', 'north traffic cone', 'customs buoy'][Math.floor(hash / 5) % 5]
-    const berth = ['Port 17 auxiliary', 'Pad C-12', 'Berth 4 Low', 'Hangar South Two', 'surface marker Theta'][Math.floor(hash / 25) % 5]
-    const squawk = String((hash % 7000) + 1000).padStart(4, '0')
-    const authority = wave.to || wave.network
-    const feeLine = fee ? `Estimated local fees: ${formatCredits(fee)} pending manifest review.` : 'No fee table was attached to this channel.'
-    const clearanceStatus: Wave['clearanceStatus'] = channel === 'docking' || channel === 'ship-to-shore' ? 'Negotiating' : 'Granted'
-    return {
-      id: `wave-reply-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-      direction: 'incoming',
-      network: wave.network,
-      from: authority,
-      to: wave.from,
-      subject: `Re: ${baseWaveSubject(wave.subject)}`,
-      body: `${authority} acknowledges ${shipName}. Provisional corridor ${corridor}; hold at ${hold}; expected assignment ${berth}; transponder ${squawk}. ${feeLine} Confirm final passenger count, hazardous cargo status, weapons safed posture, and medical priority before final clearance.`,
-      createdAt: Date.now(),
-      status: 'received',
-      crewTarget: wave.crewTarget,
-      priority: wave.priority,
-      channel,
-      contactId: wave.contactId,
-      contactName: wave.contactName,
-      clearanceStatus,
-      feesCredits: fee || undefined,
-    }
-  }
+function generateRelayReply(wave: Wave): Wave { return { id: 'story-reply-' + Date.now(), direction: 'incoming', network: wave.network, from: wave.to || 'Fictional correspondent', to: wave.from, subject: 'Re: ' + wave.subject, body: 'Simulated acknowledgement. Decide what happens next in your story; this message is not a game transmission or clearance.', createdAt: Date.now(), status: 'received', priority: wave.priority, channel: wave.channel, contactId: wave.contactId, contactName: wave.contactName } }
 
-  const opening = wave.network.includes('Covenant')
-    ? 'EchoAtlas confirms receipt.'
-    : wave.network.includes('OldEarth')
-      ? 'OldEarth switchboard has routed the packet.'
-      : wave.network.includes('Marshal')
-        ? 'District net confirms receipt.'
-        : wave.network.includes('Guild')
-          ? 'Flight Guild desk has marked the request.'
-          : wave.network.includes('Passenger')
-            ? 'Passenger exchange has posted a reply.'
-            : wave.network.includes('Asterion')
-              ? 'Asterion traffic has acknowledged the wave.'
-              : 'Deep-space carrier has resolved the packet.'
-  const detail = [
-    'No immediate threat markers are attached.',
-    'A follow-up courier window has been reserved.',
-    'The attached request has been mirrored to bridge logs.',
-    'A short telemetry bundle is available on request.',
-  ]
-
-  return {
-    id: `wave-reply-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-    direction: 'incoming',
-    network: wave.network,
-    from: wave.to,
-    to: wave.from,
-    subject: `Re: ${wave.subject}`,
-    body: `${opening} ${randomItem(detail)} Original wave: "${wave.body.slice(0, 90)}"`,
-    createdAt: Date.now(),
-    status: 'received',
-    crewTarget: wave.crewTarget,
-    priority: wave.priority,
-    channel: wave.channel,
-    contactId: wave.contactId,
-    contactName: wave.contactName,
-  }
-}
-
-function createRandomWave(crewMembers: CrewMember[]): Wave {
-  const network = randomItem(relayNetworks)
-  const target = Math.random() > 0.45 ? randomItem(crewMembers) : undefined
-  const senders = ['Asterion Traffic Control', 'The Copper Wake', 'Passenger Exchange', 'Local Flight Guild', 'Unknown old telemetry source']
-  const subjects = ['Docking lane update', 'Telemetry request', 'Passenger query', 'Crew applicant note', 'Navigation advisory']
-  const bodyLines = [
-    'Asterion requests a brief position confidence update.',
-    'A station runner says an old packet drifted through the entry beacon again.',
-    'A passenger broker has one risky long-haul inquiry and requests rate confirmation.',
-    'A guild clerk has a candidate asking whether the Intrepid accepts immediate boarding.',
-    'A chart fragment references a quiet jump window and a possible derelict.',
-  ]
-
-  return {
-    id: `wave-random-${Date.now()}-${Math.round(Math.random() * 10000)}`,
-    direction: 'incoming',
-    network,
-    from: randomItem(senders),
-    to: target?.name ?? shipName,
-    subject: randomItem(subjects),
-    body: randomItem(bodyLines),
-    createdAt: Date.now(),
-    status: 'received',
-    crewTarget: target?.name,
-    priority: Math.random() > 0.82 ? 'priority' : 'routine',
-    channel: network.includes('Traffic') ? 'hail' : 'wave',
-  }
-}
+function createRandomWave(crewMembers: CrewMember[]): Wave { return { id: 'story-prompt-' + Date.now(), direction: 'incoming', network: 'Local story channel', from: 'Story prompt (fiction)', to: crewMembers[0]?.name || 'Player', subject: 'An optional beginning', body: 'You pause on the surface of an unfamiliar world. What is your next small goal: shelter, power, exploration, or something else? This is a writing prompt, not a detected event.', createdAt: Date.now(), status: 'received', priority: 'routine', channel: 'wave' } }
 
 function contactPosition(contact: ShipCoordinate, currentPosition: ShipCoordinate, scale = mapScale) {
   return new THREE.Vector3(
@@ -5627,7 +5000,7 @@ function ShipSystemMap({
       markerGroup.children.forEach((child) => {
         if (typeof child.userData.spinRate === 'number') child.rotation.y += child.userData.spinRate
       })
-      updateMapLabelZoomScale(markerGroup, camera, controls.target)
+      updateMapLabelZoomScale(markerGroup, camera, controls.target, renderer.domElement.clientHeight)
       renderer.render(scene, camera)
       animationFrame = window.requestAnimationFrame(animate)
     }
@@ -5817,7 +5190,7 @@ function ShipSystemMap({
     orbitMaterial.dispose()
     moonOrbitMaterial.dispose()
 
-    const shipSelected = selectedContactId === currentShipContact.id
+    const shipSelected = selectedContactId === currentShipContact.id || focusContactId === currentShipContact.id
     const shipGeometry = createShipVectorGeometry(shipSelected)
     const shipMaterial = new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#7de8d2', emissiveIntensity: shipSelected ? 1.1 : 0.7 })
     const ship = new THREE.Mesh(shipGeometry, shipMaterial)
@@ -5872,7 +5245,7 @@ function ShipSystemMap({
     disableMapPicking(shipRing)
     markerGroup.add(shipRing)
 
-    const shipLabel = createBodyLabel('YOU / INTREPID', '#3dff93', shipSelected)
+    const shipLabel = createBodyLabel('PLAYER', '#3dff93', shipSelected)
     setMapLabelScale(shipLabel, 8.6, 2.12, 0.3, 1)
     shipLabel.position.set(0, 5.8, 0)
     disableMapPicking(shipLabel)
@@ -6024,7 +5397,7 @@ function ShipSystemMap({
 
     contacts.forEach((contact) => {
       if (clusteredAsteroidIds.has(contact.id)) return
-      const isSelected = contact.id === selectedContactId
+      const isSelected = contact.id === selectedContactId || contact.id === focusContactId
       const isHostile = isHostileContact(contact)
       const contactColor = contact.kind === 'gps' ? '#3dff93' : displayColorForContact(contact)
       const bodyIsReference = mapProjection.liveFocus
@@ -6133,7 +5506,7 @@ function ShipSystemMap({
       role="application"
       tabIndex={0}
       aria-label={cameraMode === 'forward'
-        ? `Intrepid forward sensor view tracking ${projectedContact?.name ?? 'the current flight vector'}.`
+        ? `player forward sensor view tracking ${projectedContact?.name ?? 'the current flight vector'}.`
         : 'Interactive 3D star system map. Arrow keys pan and plus or minus zoom.'}
       onKeyDown={(event) => {
         const camera = cameraRef.current
@@ -6375,18 +5748,22 @@ function BlueprintModelViewer({ snapshot, preset }: { snapshot: BlueprintSnapsho
 
 export function ShipOSPage({
   experience = 'console',
-  onBack,
-  accessToken,
-  isSignedIn,
-  canUseRelay,
-  accountName,
-  accountMode,
-  onSignIn,
-  onSignOut,
+  configuration,
+  worldId,
+  readOnly = false,
 }: ShipOSPageProps) {
   const isNavigationExperience = experience === 'navigation'
+  const [missionState] = usePersistentState<{ title: string; goal: string; startedAt: string }>('shipos-mission', { title: '', goal: '', startedAt: '' })
+  const currentVoyageLabel = missionState.title || 'Star System · planetary start'
+  const currentOperationalStatus = missionState.startedAt ? 'Player-authored mission active' : 'No mission started'
   const [activeTab, setActiveTab] = useState<ShipTabId>(isNavigationExperience ? 'navigation' : 'captain')
   const [mapDrawerOpen, setMapDrawerOpen] = useState(isNavigationExperience)
+  useEffect(() => { setActiveTab(isNavigationExperience ? 'navigation' : 'captain'); setMapDrawerOpen(isNavigationExperience) }, [isNavigationExperience])
+  useEffect(() => {
+    const listener = (event: Event) => setStateSyncStatus((event as CustomEvent<string>).detail)
+    window.addEventListener('shipos:sync-status', listener)
+    return () => window.removeEventListener('shipos:sync-status', listener)
+  }, [])
   const [mapCameraMode, setMapCameraMode] = useState<MapCameraMode>('overhead')
   const [masterAlarm, setMasterAlarm] = useState<MasterAlarmState>({ level: 'normal', reason: 'Systems nominal', triggeredAt: null })
   const [alarmSoundUplinkEnabled, setAlarmSoundUplinkEnabled] = usePersistentState<boolean>('shipos-alarm-sound-uplink-enabled', false)
@@ -6398,7 +5775,7 @@ export function ShipOSPage({
   const [passengerFiles, setPassengerFiles] = usePersistentState<PassengerFile[]>('shipos-passenger-files', initialPassengerFiles)
   const [bankEntries, setBankEntries] = usePersistentState<BankEntry[]>('shipos-bank-entries', createInitialBankEntries())
   const [waves, setWaves] = usePersistentState<Wave[]>('shipos-waves', createInitialWaves())
-  const [autoWaveEnabled, setAutoWaveEnabled] = usePersistentState<boolean>('shipos-auto-wave-enabled', true)
+  const [autoWaveEnabled, setAutoWaveEnabled] = usePersistentState<boolean>('shipos-auto-wave-enabled', false)
   const [shipLogs, setShipLogs] = usePersistentState<ShipLog[]>('shipos-logs', createInitialLogs())
   const [contactNotes, setContactNotes] = usePersistentState<Record<string, string>>('shipos-contact-notes', {})
   const [contactImages, setContactImages] = usePersistentState<ContactImageAttachment[]>('shipos-contact-images', [])
@@ -6432,20 +5809,32 @@ export function ShipOSPage({
   const [contactFactionAssignments, setContactFactionAssignments] = usePersistentState<Record<string, string>>('shipos-contact-factions', {})
   const [bodyScaleMode, setBodyScaleMode] = usePersistentState<BodyScaleMode>('shipos-body-scale-mode', 'true-scale')
   const [displayPreferences, setDisplayPreferences] = usePersistentState<ShipOsDisplayPreferences>('shipos-display-preferences', defaultShipOsDisplayPreferences)
-  const [shipOsAiModels, setShipOsAiModels] = useState<ShipOsAiModelOption[]>([
-    { providerName: 'OpenRouter', modelName: 'openai/gpt-4o-mini', displayName: 'OpenRouter | GPT-4o mini', isDefault: true },
-  ])
+  const [shipOsAiModels, setShipOsAiModels] = useState<ShipOsAiModelOption[]>([])
   const [shipOsAiModelKey, setShipOsAiModelKey] = usePersistentState<string>('shipos-ai-model', '')
-  const [shipOsAiPrompt, setShipOsAiPrompt] = useState('Prepare a concise captain\'s brief. Prioritize immediate hazards, navigation decisions, open commitments, and communications requiring action.')
+  const [shipOsAiPrompt, setShipOsAiPrompt] = useState('Help me begin a Star System survival story from my current surface position. Separate observed telemetry from optional fiction. Suggest three small goals without inventing an established crew, ship, wealth, or mission.')
   const [shipOsAiReply, setShipOsAiReply] = useState('')
   const [shipOsAiError, setShipOsAiError] = useState('')
   const [shipOsAiBusy, setShipOsAiBusy] = useState(false)
-  const [stateSyncStatus, setStateSyncStatus] = useState(accessToken ? 'Connecting to campaign database' : 'Local storage only')
-  const [relayPairingKey, setRelayPairingKey] = useState('')
-  const [relayPairingBusy, setRelayPairingBusy] = useState(false)
+  const [stateSyncStatus, setStateSyncStatus] = useState('Local SQLite database')
+
+
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null)
   const [mapFocusContactId, setMapFocusContactId] = useState(currentShipContactId)
   const [mapFocusRequest, setMapFocusRequest] = useState(0)
+  const [telemetryFocusId, setTelemetryFocusId] = useState(currentShipContactId)
+  const [focusNotice, setFocusNotice] = useState('')
+  const fleet = useMemo(() => friendlyFleet(lastTelemetryPacket), [lastTelemetryPacket])
+  const fleetContactIds = useMemo(() => new Set(fleet.map(grid => grid.id)), [fleet])
+  const focusedGrid = fleet.find(grid => grid.id === telemetryFocusId)
+  const displayTelemetry = useMemo(() => focusedTelemetry(lastTelemetryPacket, focusedGrid), [lastTelemetryPacket, focusedGrid])
+  const displayPosition = focusedGrid ?? currentPosition
+  useEffect(() => {
+    if (telemetryFocusId === currentShipContactId || focusedGrid) return
+    setTelemetryFocusId(currentShipContactId)
+    setMapFocusContactId(currentShipContactId)
+    setMapFocusRequest(current => current + 1)
+    setFocusNotice('That grid is no longer in the tagged friendly fleet. Returned to Player. It may have been unloaded, removed, renamed, or changed ownership.')
+  }, [telemetryFocusId, focusedGrid])
   const [waypointDraft, setWaypointDraft] = useState<DraftWaypoint>(createDefaultWaypointDraft())
   const [gpsImportDraft, setGpsImportDraft] = useState('')
   const [modalDraft, setModalDraft] = useState<ContactModalDraft>({ name: '', className: '', factionName: '', notes: '' })
@@ -6458,7 +5847,7 @@ export function ShipOSPage({
   const [editingCrewId, setEditingCrewId] = useState<string | null>(null)
   const [crewEditDraft, setCrewEditDraft] = useState<CrewFormDraft>(createDefaultCrewDraft())
   const [cargoDraft, setCargoDraft] = useState({ name: '', category: 'Resource', quantity: '', mass: '', bay: '' })
-  const [selectedJobId, setSelectedJobId] = useState('job-ares-europa-pelagos-passage')
+  const [selectedJobId, setSelectedJobId] = useState('')
   const [jobDraft, setJobDraft] = useState<JobDraft>(createDefaultJobDraft())
   const [editingJobId, setEditingJobId] = useState<string | null>(null)
   const [jobEditDraft, setJobEditDraft] = useState<JobDraft>(createDefaultJobDraft())
@@ -6490,8 +5879,8 @@ export function ShipOSPage({
   const [imageryError, setImageryError] = useState('')
   const telemetryHistoryRef = useRef<TelemetrySample[]>(telemetryHistory)
   const modalDraftContactIdRef = useRef<string | null>(null)
-  const remoteStateRevisionRef = useRef<number | null>(null)
-  const remoteStateSaveTimerRef = useRef<number | null>(null)
+
+
   const masterAlarmCautionArmedRef = useRef(true)
   const masterAlarmCriticalActiveRef = useRef(false)
   const masterAlarmCriticalAcknowledgedRef = useRef(false)
@@ -6532,17 +5921,25 @@ export function ShipOSPage({
   )
   const allContacts = useMemo(() => {
     const contacts = [
-      ...calibratedStarSystemBodies,
+      ...calibratedStarSystemBodies.filter((body) => planetaryChartOverrides[body.id]),
       ...relayContacts,
       ...customContacts.filter((contact) => !isTelemetryManagedContact(contact) && !isHiddenTelemetryContact(contact) && !isKnownPlanetaryChartContact(contact)),
       ...liveTelemetryContacts
-        .filter((contact) => !isHiddenTelemetryContact(contact) && !isKnownPlanetaryChartContact(contact))
+        .filter((contact) => !fleetContactIds.has(contact.id) && !isHiddenTelemetryContact(contact) && !isKnownPlanetaryChartContact(contact))
         .map((contact) => applySavedTelemetryContactOverride(contact, savedTelemetryContactOverrides.get(contact.id))),
     ]
-    return contacts
+    const fleetContacts: ShipContact[] = fleet.map(grid => ({
+      id: grid.id, name: grid.name, sourceName: grid.name, kind: grid.kind,
+      x: grid.x, y: grid.y, z: grid.z, velocityX: grid.velocityX, velocityY: grid.velocityY, velocityZ: grid.velocityZ, speed: grid.speed,
+      className: `${grid.relationship} tagged ${grid.kind === 'station' ? 'base' : 'grid'}`, relationship: grid.relationship,
+      contactSource: 'grid', telemetryManaged: true, color: '#75d69d',
+      status: `Tagged fleet telemetry · ${lastTelemetryPacket?.stamp || 'last known'}`,
+      notes: 'Opted in with [ShipOS]. Ownership verified by the local game mod. Separate grids/subgrids require their own tag.',
+    }))
+    return [...contacts
       .map((contact) => applyContactDispositionOverride(contact, contactDesignations[contact.id]))
-      .map((contact) => applyContactFactionAssignment(contact, contactFactionAssignments[contact.id]))
-  }, [calibratedStarSystemBodies, contactDesignations, contactFactionAssignments, customContacts, liveTelemetryContacts, savedTelemetryContactOverrides])
+      .map((contact) => applyContactFactionAssignment(contact, contactFactionAssignments[contact.id])), ...fleetContacts]
+  }, [calibratedStarSystemBodies, contactDesignations, contactFactionAssignments, customContacts, liveTelemetryContacts, savedTelemetryContactOverrides, fleet, fleetContactIds, lastTelemetryPacket?.stamp])
   const contactFactionOptions = useMemo(
     () => createContactFactionOptions(allContacts, metagameRecords, directoryEntities),
     [allContacts, directoryEntities, metagameRecords],
@@ -6553,14 +5950,14 @@ export function ShipOSPage({
   )
   const normalizedContactSort = useMemo(() => normalizeContactSortState(contactSortState), [contactSortState])
   const visibleContacts = useMemo(
-    () => allContacts.filter((contact) => contactVisibleByFilters(contact, normalizedContactFilters)
-      && (contactAlwaysVisible(contact) || contactMatchesSearch(contact, contactSearchText))),
-    [allContacts, contactSearchText, normalizedContactFilters],
+    () => allContacts.filter((contact) => fleetContactIds.has(contact.id) || (contactVisibleByFilters(contact, normalizedContactFilters)
+      && (contactAlwaysVisible(contact) || contactMatchesSearch(contact, contactSearchText)))),
+    [allContacts, contactSearchText, normalizedContactFilters, fleetContactIds],
   )
   const archivedEncounterMemory = useMemo(() => {
-    const liveKeys = new Set(liveTelemetryContacts.map(contactMemoryKey))
+    const liveKeys = new Set([...liveTelemetryContacts, ...allContacts.filter(contact => fleetContactIds.has(contact.id))].map(contactMemoryKey))
     return encounterMemory.filter((contact) => !liveKeys.has(contact.key))
-  }, [encounterMemory, liveTelemetryContacts])
+  }, [encounterMemory, liveTelemetryContacts, allContacts, fleetContactIds])
   const visibleEncounterMemory = useMemo(() => {
     const search = normalizeContactSearchText(contactSearchText)
     return archivedEncounterMemory.filter((contact) => {
@@ -6591,7 +5988,7 @@ export function ShipOSPage({
     notes: lastTelemetryPacket
       ? `Last packet from ${lastTelemetryPacket.source || 'telemetry'} at ${lastTelemetryPacket.stamp || 'unknown time'}. Speed ${formatMetersPerSecond(lastTelemetryPacket.speed)}.`
       : 'Current map origin. Update this manually in Navigation or through the telemetry uplink.',
-    faction: 'DSV Intrepid',
+    faction: 'Local player',
     velocityX: lastTelemetryPacket?.velocityX,
     velocityY: lastTelemetryPacket?.velocityY,
     velocityZ: lastTelemetryPacket?.velocityZ,
@@ -6671,8 +6068,8 @@ export function ShipOSPage({
   const recurringMonthlyBurn = bankEntries.filter((entry) => entry.recurring && entry.kind === 'expense').reduce((total, entry) => total + entry.amount, 0)
   const operatingBalance = bankEntries.reduce((total, entry) => total + (entry.kind === 'income' ? entry.amount : -entry.amount), 0)
   const plannedDestination = useMemo(
-    () => allContacts.find((contact) => contact.id === navigationPlan.destinationId) ?? selectedContact ?? calibratedStarSystemBodies[0],
-    [allContacts, calibratedStarSystemBodies, navigationPlan.destinationId, selectedContact],
+    () => allContacts.find((contact) => contact.id === navigationPlan.destinationId) ?? selectedContact ?? currentShipContact,
+    [allContacts, currentShipContact, navigationPlan.destinationId, selectedContact],
   )
   const routeDistance = useMemo(() => distanceMeters(currentPosition, plannedDestination), [currentPosition, plannedDestination])
   const cruiseSpeed = Math.max(1, Number(navigationPlan.cruiseSpeed) || 95)
@@ -6692,26 +6089,28 @@ export function ShipOSPage({
     ? Math.min(...lastTelemetryPacket.terrainScan.map((sample) => sample.clearance))
     : null
   const terrainCriticalFloor = 45 + Math.max(0, Number(lastTelemetryPacket?.speed) || 0) * 1.2
-  const terrainCritical = terrainMinimumClearance !== null && terrainMinimumClearance <= terrainCriticalFloor
+  const onFoot = lastTelemetryPacket?.controlMode === 'character'
+  const flightAlarmsEnabled = !onFoot && (Number(lastTelemetryPacket?.speed) || 0) > 1
+  const terrainCritical = flightAlarmsEnabled && terrainMinimumClearance !== null && terrainMinimumClearance <= terrainCriticalFloor
   const criticalTelemetryAlert = telemetryAlerts.find((alert) => alert.level === 'Critical')
   const masterAlarmCriticalReason = terrainCritical
     ? `Terrain clearance ${formatAltitude(terrainMinimumClearance)}`
-    : alarmFlightDirector.state === 'critical'
+    : flightAlarmsEnabled && alarmFlightDirector.state === 'critical'
     ? alarmFlightDirector.status
     : criticalTelemetryAlert
       ? `${criticalTelemetryAlert.label}: ${criticalTelemetryAlert.detail}`
       : ''
   const masterAlarmCautionReasons = [
-    alarmFlightDirector.surfaceAltitude !== null && alarmFlightDirector.surfaceAltitude < masterAlarmAltitudeCautionMeters
+    flightAlarmsEnabled && alarmFlightDirector.surfaceAltitude !== null && alarmFlightDirector.surfaceAltitude < masterAlarmAltitudeCautionMeters
       ? `Radar altitude ${formatAltitude(alarmFlightDirector.surfaceAltitude)}`
       : '',
-    nearestAsteroidRange !== null && nearestAsteroidRange < asteroidCautionEnvelopeMeters
+    flightAlarmsEnabled && nearestAsteroidRange !== null && nearestAsteroidRange < asteroidCautionEnvelopeMeters
       ? `Asteroid range ${formatAltitude(nearestAsteroidRange)}`
       : '',
   ].filter(Boolean)
   const masterAlarmCautionReason = masterAlarmCautionReasons.join(' / ')
   const masterAlarmCautionActive = Boolean(masterAlarmCautionReason)
-  const masterAlarmCautionClear = (alarmFlightDirector.surfaceAltitude === null || alarmFlightDirector.surfaceAltitude >= 1200)
+  const masterAlarmCautionClear = !flightAlarmsEnabled || (alarmFlightDirector.surfaceAltitude === null || alarmFlightDirector.surfaceAltitude >= 1200)
     && (nearestAsteroidRange === null || nearestAsteroidRange >= 2400)
   const telemetryDistance = useMemo(() => telemetryPathDistance(telemetryHistory), [telemetryHistory])
   const averageTelemetrySpeed = telemetryHistory.length
@@ -6805,23 +6204,11 @@ export function ShipOSPage({
   const latestBlueprint = blueprintSnapshots[0] ?? null
   const bridgePollSeconds = normalizeBridgePollSeconds(bridgeConfig.pollSeconds)
   const displayedShipSystemRows = useMemo(() => {
-    if (!lastTelemetryPacket) return shipSystemRows
-    const totalBlocks = Number(lastTelemetryPacket.terminalBlockCount) || 0
-    const damagedBlocks = Number(lastTelemetryPacket.nonFunctionalBlockCount) || 0
-    const hullIntegrity = totalBlocks > 0 ? Math.max(0, 100 - (damagedBlocks / totalBlocks * 100)) : 98
-    return [
-      { name: 'Hull integrity', value: hullIntegrity, note: damagedBlocks > 0 ? `${damagedBlocks.toLocaleString()} non-functional blocks reported by telemetry.` : 'Live block-damage watch nominal.' },
-      { name: 'Hydrogen reserve', value: telemetryPercent(lastTelemetryPacket.hydrogenPercent, 78), note: 'Live PB packet when tanks are named with Hydrogen.' },
-      { name: 'Battery charge', value: telemetryPercent(lastTelemetryPacket.batteryPercent, 82), note: 'Live PB packet aggregated across batteries.' },
-      { name: 'Jump drive charge', value: telemetryPercent(lastTelemetryPacket.jumpPercent, 74), note: 'Live PB packet aggregated across jump drives.' },
-      { name: 'FTL readiness', value: telemetryPercent(lastTelemetryPacket.jumpPercent, 100), note: 'Live charge estimate; certified isolation remains under Bridge, Engineering, and local control.' },
-      { name: 'Weapons status', value: lastTelemetryPacket.weaponCount ? 100 : 100, note: lastTelemetryPacket.weaponCount ? `${lastTelemetryPacket.weaponCount.toLocaleString()} weapon blocks reporting on-grid; ABIGAIL has no release authority.` : 'Military-derived array operational; ABIGAIL has no release authority.' },
-      { name: 'Medical suite', value: 100, note: 'Ares Meridian refit complete with independent emergency feeds and reserve power.' },
-      { name: 'Oxygen reserve', value: telemetryPercent(lastTelemetryPacket.oxygenPercent, 88), note: 'Live PB packet when tanks are named with Oxygen.' },
-      { name: 'Reactor output', value: telemetryPercent(lastTelemetryPacket.reactorPercent, 64), note: 'Live PB packet aggregated across reactors.' },
-      { name: 'Cargo volume', value: telemetryPercent(lastTelemetryPacket.cargoPercent, 0), note: 'Live PB packet from all ship inventories.' },
-    ]
-  }, [lastTelemetryPacket])
+        if (!lastTelemetryPacket) return shipSystemRows
+        return ([['Battery charge','batteryPercent'],['Hydrogen reserve','hydrogenPercent'],['Oxygen reserve','oxygenPercent'],['Jump charge','jumpPercent'],['Cargo volume','cargoPercent']] as const)
+          .filter(([, key]) => Number.isFinite(lastTelemetryPacket[key]))
+          .map(([name,key]) => ({ name, value: Number(lastTelemetryPacket[key]), note: 'Reported by the local game packet.' }))
+      }, [lastTelemetryPacket])
 
   useEffect(() => {
     window.scrollTo(0, 0)
@@ -6835,13 +6222,13 @@ export function ShipOSPage({
           cache: 'no-store',
           headers: {
             Accept: 'application/json',
-            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           },
         })
         if (!response.ok) throw new Error(`Model catalog returned HTTP ${response.status}.`)
         const models = await response.json() as ShipOsAiModelOption[]
-        if (cancelled || !models.length) return
+        if (cancelled) return
         setShipOsAiModels(models)
+        if (!models.length) return
         setShipOsAiModelKey((current) => {
           if (models.some((model) => `${model.providerName}|${model.modelName}` === current)) return current
           const preferred = models.find((model) => model.isDefault) ?? models[0]
@@ -6852,8 +6239,9 @@ export function ShipOSPage({
       }
     }
     void loadAiModels()
-    return () => { cancelled = true }
-  }, [accessToken, setShipOsAiModelKey])
+    window.addEventListener('shipos:ai-settings', loadAiModels)
+    return () => { cancelled = true; window.removeEventListener('shipos:ai-settings', loadAiModels) }
+  }, [setShipOsAiModelKey])
 
   useEffect(() => {
     const reportPersistenceError = (event: Event) => {
@@ -6864,96 +6252,7 @@ export function ShipOSPage({
     return () => window.removeEventListener(shipOsPersistenceErrorEvent, reportPersistenceError)
   }, [])
 
-  useEffect(() => {
-    if (!accessToken) {
-      setStateSyncStatus('Local storage only / sign in to synchronize')
-      return
-    }
 
-    let cancelled = false
-    let changeListener: (() => void) | null = null
-
-    const saveState = async (expectedRevision: number | null) => {
-      const response = await fetch('/api/shipos/state/carthage', {
-        method: 'PUT',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ state: collectShipOsLocalState(), expectedRevision }),
-      })
-      if (response.status === 409) throw new Error('Campaign state changed on another console. Reload ShipOS before saving again.')
-      if (!response.ok) throw new Error(`Campaign synchronization returned HTTP ${response.status}.`)
-      const saved = await response.json() as ShipOsRemoteState
-      remoteStateRevisionRef.current = saved.revision
-      window.localStorage.setItem(shipOsRemoteRevisionKey, String(saved.revision))
-      window.localStorage.setItem(shipOsRemoteUpdatedAtKey, saved.updatedAt)
-      window.localStorage.removeItem(shipOsLocalDirtyAtKey)
-      if (!cancelled) setStateSyncStatus(`Database synchronized / revision ${saved.revision}`)
-      return saved
-    }
-
-    const hydrate = async () => {
-      setStateSyncStatus('Loading campaign database')
-      const response = await fetch('/api/shipos/state/carthage', {
-        cache: 'no-store',
-        headers: { Accept: 'application/json', Authorization: `Bearer ${accessToken}` },
-      })
-      if (response.status === 404) {
-        await saveState(null)
-      } else {
-        if (!response.ok) throw new Error(`Campaign synchronization returned HTTP ${response.status}.`)
-        const remote = await response.json() as ShipOsRemoteState
-        remoteStateRevisionRef.current = remote.revision
-        const localState = collectShipOsLocalState()
-        const localRevision = Number(window.localStorage.getItem(shipOsRemoteRevisionKey) || 0)
-        const localDirtyAt = Number(window.localStorage.getItem(shipOsLocalDirtyAtKey) || 0)
-        const remoteUpdatedAt = Date.parse(remote.updatedAt)
-        const statesMatch = shipOsStateSignature(localState) === shipOsStateSignature(remote.state)
-
-        if (!statesMatch && localRevision > 0 && localDirtyAt > remoteUpdatedAt) {
-          await saveState(remote.revision)
-        } else if (!statesMatch) {
-          const hydratedKeys = applyShipOsRemoteState(remote.state)
-          window.localStorage.setItem(shipOsRemoteRevisionKey, String(remote.revision))
-          window.localStorage.setItem(shipOsRemoteUpdatedAtKey, remote.updatedAt)
-          window.localStorage.removeItem(shipOsLocalDirtyAtKey)
-          if (hydratedKeys.length > 0) {
-            window.dispatchEvent(new CustomEvent(shipOsStateHydratedEvent, { detail: { keys: hydratedKeys } }))
-          }
-          setStateSyncStatus(`Database synchronized / revision ${remote.revision}`)
-        } else {
-          window.localStorage.setItem(shipOsRemoteRevisionKey, String(remote.revision))
-          window.localStorage.setItem(shipOsRemoteUpdatedAtKey, remote.updatedAt)
-          window.localStorage.removeItem(shipOsLocalDirtyAtKey)
-          setStateSyncStatus(`Database synchronized / revision ${remote.revision}`)
-        }
-      }
-
-      changeListener = () => {
-        if (remoteStateSaveTimerRef.current !== null) window.clearTimeout(remoteStateSaveTimerRef.current)
-        setStateSyncStatus('Campaign changes pending')
-        remoteStateSaveTimerRef.current = window.setTimeout(() => {
-          remoteStateSaveTimerRef.current = null
-          void saveState(remoteStateRevisionRef.current).catch((error) => {
-            if (!cancelled) setStateSyncStatus(error instanceof Error ? error.message : 'Campaign synchronization failed')
-          })
-        }, 1200)
-      }
-      window.addEventListener(shipOsStateChangedEvent, changeListener)
-    }
-
-    void hydrate().catch((error) => {
-      if (!cancelled) setStateSyncStatus(error instanceof Error ? error.message : 'Campaign synchronization failed')
-    })
-
-    return () => {
-      cancelled = true
-      if (changeListener) window.removeEventListener(shipOsStateChangedEvent, changeListener)
-      if (remoteStateSaveTimerRef.current !== null) window.clearTimeout(remoteStateSaveTimerRef.current)
-    }
-  }, [accessToken])
 
   useEffect(() => {
     telemetryHistoryRef.current = telemetryHistory
@@ -6969,35 +6268,9 @@ export function ShipOSPage({
     setEncounterMemory((current) => mergeEncounterMemory(current, contacts, seenAt))
   }, [contactDesignations, contactFactionAssignments, lastTelemetryPacket, setEncounterMemory])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (window.localStorage.getItem(campaignSeedVersionKey) === campaignSeedVersion) return
 
-    setCrewMembers((current) => upsertRecords(current, initialCrew, retiredCrewRecordIds))
-    setCargoItems((current) => upsertRecords(current, initialCargo, retiredCargoRecordIds))
-    setJobRecords((current) => upsertRecords(current, initialJobs, retiredJobRecordIds))
-    setPassengerFiles((current) => upsertRecords(current, initialPassengerFiles, retiredPassengerFileIds))
-    setBankEntries((current) => upsertRecords(current.filter((entry) => !entry.id.startsWith('bank-seed-')), createInitialBankEntries()))
-    setWaves((current) => upsertRecords(current.filter((wave) => !wave.id.startsWith('wave-seed-')), createInitialWaves()))
-    setShipLogs((current) => upsertRecords(current.filter((entry) => !entry.id.startsWith('log-seed-')), createInitialLogs()))
-    setMetagameRecords((current) => upsertRecords(current, initialMetagameRecords))
-    setSavedLocationRecords((current) => upsertRecords(current, initialLocationRecords))
-    setDirectoryEntities((current) => upsertRecords(current, initialDirectoryEntities))
-    setShipConfigurations((current) => upsertRecords(current, initialShipConfigurations, retiredShipConfigurationIds))
-    setSquawkRecords((current) => upsertRecords(current, initialSquawks, retiredSquawkRecordIds))
-    setCommitmentRecords((current) => upsertRecords(current, initialCommitments))
-    setChronicleEntries((current) => upsertRecords(current, initialChronicle))
-    setMedicalFacilities((current) => upsertRecords(current, initialMedicalFacilities))
-    setSecurityIncidents((current) => upsertRecords(current, initialSecurityIncidents))
-    setStoresRecords((current) => upsertRecords(current, initialStoresRecords))
-    setNavigationPlan(createDefaultNavigationPlan())
-    setSelectedJobId('job-ares-europa-pelagos-passage')
-    window.localStorage.setItem(campaignSeedVersionKey, campaignSeedVersion)
-  }, [setBankEntries, setCargoItems, setChronicleEntries, setCommitmentRecords, setCrewMembers, setDirectoryEntities, setJobRecords, setMedicalFacilities, setMetagameRecords, setNavigationPlan, setPassengerFiles, setSavedLocationRecords, setSecurityIncidents, setShipConfigurations, setShipLogs, setSquawkRecords, setStoresRecords, setWaves])
 
-  useEffect(() => {
-    setJobRecords((current) => current.some((job) => job.id === holdingJobId) ? current : [initialJobs[0], ...current])
-  }, [setJobRecords])
+
 
   useEffect(() => {
     setCustomContacts((current) => {
@@ -7030,6 +6303,8 @@ export function ShipOSPage({
   }, [echoMailPageCount])
 
   const appendLog = useCallback((system: string, entry: string) => {
+    // The server retains packet history. Do not turn every sensor tick into a shared story edit.
+    if (system === 'TELEMETRY' || system === 'MASTER ALARM') return
     setShipLogs((current) => [
       { id: `log-${Date.now()}-${Math.round(Math.random() * 10000)}`, stamp: Date.now(), system, entry },
       ...current,
@@ -7093,6 +6368,7 @@ export function ShipOSPage({
   }, [masterAlarm.level, masterAlarm.triggeredAt])
 
   const ingestTelemetryPacket = (packet: TelemetryPacket, importedBy: TelemetrySample['importedBy']) => {
+    if (importedBy === 'bridge' && worldId && (packet.worldId || 'unassigned-world') !== worldId) throw new Error('World changed. Reload to open the correct local profile.')
     const sample = createTelemetrySample(packet, importedBy)
     const identity = telemetryPacketIdentity(sample)
     const currentHistory = telemetryHistoryRef.current
@@ -7151,26 +6427,9 @@ export function ShipOSPage({
     }))
   }
 
-  const useCloudBridgeEndpoint = () => {
-    setBridgeError('')
-    setBridgeConfig((current) => ({
-      ...current,
-      endpoint: cloudBridgeEndpoint,
-      autoPoll: true,
-      status: 'EchoBoard relay selected / auto poll enabled',
-      consecutiveFailures: 0,
-    }))
-  }
 
-  const copyRemoteShipOsLink = async () => {
-    try {
-      await navigator.clipboard.writeText(`${window.location.origin}/shipos`)
-      setBridgeError('')
-      setBridgeConfig((current) => ({ ...current, status: 'Remote ShipOS link copied' }))
-    } catch {
-      setBridgeError(`Remote ShipOS URL: ${window.location.origin}/shipos`)
-    }
-  }
+
+
 
   const pollTelemetryBridge = async (options: { silent?: boolean } = {}) => {
     const endpoint = bridgeConfig.endpoint.trim()
@@ -7181,7 +6440,7 @@ export function ShipOSPage({
     setBridgeError('')
     setBridgeConfig((current) => ({ ...current, status: options.silent ? current.status : 'Polling bridge...', lastAttemptAt: Date.now() }))
     try {
-      const result = await fetchBridgeWithFallback(endpoint, false, accessToken)
+      const result = await fetchBridgeWithFallback(endpoint, false)
       const payload = result.payload
       const packet = parseBridgePacket(payload)
       const didImport = ingestTelemetryPacket(packet, 'bridge')
@@ -7214,23 +6473,24 @@ export function ShipOSPage({
     setBridgeError('')
     setBridgeConfig((current) => ({ ...current, status: 'Checking bridge health...', lastAttemptAt: Date.now() }))
     try {
-      const result = await fetchBridgeWithFallback(endpoint, true, accessToken)
+      const result = await fetchBridgeWithFallback(endpoint, true)
       const payload = result.payload
       const health = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {}
-      const healthStamp = typeof health.latestStamp === 'string' ? health.latestStamp : undefined
+      const telemetryHealth = health.telemetry && typeof health.telemetry === 'object' ? health.telemetry as Record<string, unknown> : {}
+      const healthStamp = typeof telemetryHealth.stamp === 'string' ? telemetryHealth.stamp : undefined
       const healthPacketAge = telemetryPacketAge(healthStamp)
-      const recoveredEndpoint = bridgeTelemetryEndpointFromHealth(result.endpoint)
+      const recoveredEndpoint = bridgeTelemetryEndpointFromHealth()
       const recovered = recoveredEndpoint !== endpoint
       setBridgeConfig((current) => ({
         ...current,
         endpoint: recoveredEndpoint,
         status: healthPacketAge !== null && healthPacketAge > 30000
-          ? 'Relay online, game packet stale'
+          ? 'Game packet stale — last known position'
           : typeof health.status === 'string' ? `Bridge ${health.status}` : 'Bridge online',
         lastAttemptAt: Date.now(),
         lastHealthAt: Date.now(),
         consecutiveFailures: 0,
-        packetCount: coerceTelemetryNumber(health.packetCount) ?? current.packetCount,
+        packetCount: coerceTelemetryNumber(telemetryHealth.accepted) ?? current.packetCount,
         latestStamp: healthStamp ?? current.latestStamp,
         bridgeUptimeSeconds: coerceTelemetryNumber(health.uptimeSeconds) ?? current.bridgeUptimeSeconds,
       }))
@@ -7247,40 +6507,9 @@ export function ShipOSPage({
     }
   }
 
-  const pairTelemetryRelay = async () => {
-    if (!accessToken) {
-      setBridgeError('Sign in to EchoBoard before creating a private relay key.')
-      return
-    }
-    setRelayPairingBusy(true)
-    setBridgeError('')
-    try {
-      const response = await fetch('/api/shipos/telemetry/pair', {
-        method: 'POST',
-        headers: {
-          Accept: 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ label: 'DSV Intrepid tray helper' }),
-      })
-      if (!response.ok) throw new Error(`Relay pairing returned HTTP ${response.status}.`)
-      const pairing = await response.json() as ShipOsTelemetryPairing
-      setRelayPairingKey(pairing.secret)
-      await navigator.clipboard?.writeText(pairing.secret)
-      setBridgeConfig((current) => ({ ...current, status: 'Private relay key created and copied' }))
-    } catch (error) {
-      setBridgeError(error instanceof Error ? error.message : 'Could not pair the telemetry relay.')
-    } finally {
-      setRelayPairingBusy(false)
-    }
-  }
 
-  const copyRelayPairingKey = async () => {
-    if (!relayPairingKey) return
-    await navigator.clipboard.writeText(relayPairingKey)
-    setBridgeConfig((current) => ({ ...current, status: 'Relay key copied' }))
-  }
+
+
 
   pollTelemetryBridgeRef.current = pollTelemetryBridge
 
@@ -7446,7 +6675,7 @@ export function ShipOSPage({
       id: `bank-payroll-${Date.now()}-${Math.round(Math.random() * 10000)}`,
       date: currentIsoDate(),
       kind: 'expense',
-      vendor: 'DSV Intrepid Crew',
+      vendor: 'Local player Crew',
       category: 'Payroll',
       amount: personnelPayroll,
       recurring: false,
@@ -7477,11 +6706,22 @@ export function ShipOSPage({
     setMapFocusRequest((current) => current + 1)
   }, [])
 
-  const focusIntrepidOnMap = useCallback(() => {
+  const focusplayerOnMap = useCallback(() => {
+    setTelemetryFocusId(currentShipContactId)
+    setFocusNotice('')
     setMapCameraMode('overhead')
     setMapFocusContactId(currentShipContactId)
     setMapFocusRequest((current) => current + 1)
   }, [])
+
+  const refocusTelemetry = (id = telemetryFocusId) => {
+    const target = fleetContactIds.has(id) ? id : currentShipContactId
+    setTelemetryFocusId(target)
+    setMapFocusContactId(target)
+    setMapFocusRequest(current => current + 1)
+    setMapCameraMode('overhead')
+    setFocusNotice('')
+  }
 
   const showForwardMapView = useCallback(() => {
     setMapCameraMode('forward')
@@ -7931,27 +7171,25 @@ export function ShipOSPage({
   const requestShipOsAiBrief = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     if (!shipOsAiPrompt.trim() || !selectedShipOsAiModel || shipOsAiBusy) return
-    if (!accessToken) {
-      setShipOsAiError('Sign in to EchoBoard before sending command data to ABIGAIL.')
-      return
-    }
 
     setShipOsAiBusy(true)
     setShipOsAiError('')
     try {
       const operationalContext = {
-        ship: shipName,
+        ship: lastTelemetryPacket?.ship || 'Engineer (no vessel identified)',
+        mission: missionState,
         shipTime: currentShipTime,
         voyage: currentVoyageLabel,
         operationalStatus: currentOperationalStatus,
-        position: currentPosition,
-        destination: {
+        position: lastTelemetryPacket ? currentPosition : null,
+        destination: navigationPlan.destinationId ? {
           name: plannedDestination.name,
           range: formatKm(routeDistance),
           eta: routeEta,
-        },
+        } : null,
         telemetry: {
           packetStamp: lastTelemetryPacket?.stamp ?? null,
+          packetAgeMs: telemetryPacketAge(lastTelemetryPacket?.stamp),
           speed: lastTelemetryPacket?.speed ?? null,
           batteryPercent: lastTelemetryPacket?.batteryPercent ?? null,
           hydrogenPercent: lastTelemetryPacket?.hydrogenPercent ?? null,
@@ -7985,11 +7223,11 @@ export function ShipOSPage({
           pending: selectedEchoThread.pendingCount,
         } : null,
       }
-      const response = await fetch('/api/gaming/shipos/ai/brief', {
+      const response = await fetch('/api/ai/brief', {
         method: 'POST',
         headers: {
           Accept: 'application/json',
-          Authorization: `Bearer ${accessToken}`,
+          'X-ShipOS-Client': 'local-beta',
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -8097,7 +7335,6 @@ export function ShipOSPage({
   }
 
   const removeCrewMember = (member: CrewMember) => {
-    if (member.id === 'crew-hales') return
     setCrewMembers((current) => current.filter((item) => item.id !== member.id))
     if (editingCrewId === member.id) cancelEditingCrewMember()
     appendLog('PERSONNEL', `Removed personnel record for ${member.name}.`)
@@ -8165,7 +7402,7 @@ export function ShipOSPage({
       ...current,
       jobId: job.id,
       destination: current.destination || job.destination,
-      origin: current.origin || 'Asterion Orbital',
+      origin: current.origin || '',
     }))
   }
 
@@ -8429,37 +7666,19 @@ export function ShipOSPage({
     appendLog('METAGAME', `Deleted backstage record ${record.name}.`)
   }
 
-  const exportCampaignBackup = () => {
-    const backup = {
-      format: 'shipos-carthage-backup-v1',
-      exportedAt: new Date().toISOString(),
-      state: collectShipOsLocalState(true),
-    }
-    const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `shipos-carthage-${currentIsoDate()}.json`
-    link.click()
-    URL.revokeObjectURL(url)
-  }
+  const exportCampaignBackup = () => { window.location.assign('/api/admin/backup') }
 
   const importCampaignBackup = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0]
-    event.currentTarget.value = ''
-    if (!file) return
-    try {
-      const payload = JSON.parse(await file.text()) as { format?: string; state?: Record<string, unknown> }
-      if (payload.format !== 'shipos-carthage-backup-v1' || !payload.state || typeof payload.state !== 'object') {
-        throw new Error('This is not a ShipOS Carthage backup file.')
-      }
-      if (!window.confirm('Restore this ShipOS backup? Current browser records will be replaced where the backup contains matching files.')) return
-      applyShipOsBackupState(payload.state)
-      window.localStorage.setItem(shipOsLocalDirtyAtKey, String(Date.now()))
-      window.location.reload()
-    } catch (error) {
-      setStateSyncStatus(error instanceof Error ? error.message : 'Campaign backup could not be restored')
+      const file = event.currentTarget.files?.[0]; event.currentTarget.value = ''; if (!file) return
+      try {
+        if (file.size > 13_000_000) throw new Error('Backup is too large.')
+        const backup = JSON.parse(await file.text())
+        if (!window.confirm('Replace this world’s story from backup? A snapshot will be kept.')) return
+        const state = await localApi<{worldId: string; revision: number}>('/api/state')
+        await localApi('/api/admin/restore', { backup, worldId: state.worldId, expectedRevision: state.revision })
+        window.location.reload()
+      } catch(error) { setStateSyncStatus((error as Error).message) }
     }
-  }
 
   const renderJobForm = (
     draft: JobDraft,
@@ -8584,8 +7803,8 @@ export function ShipOSPage({
     </form>
   )
 
-  const renderTab = () => {
-    if (activeTab === 'telemetry') {
+  const renderTab = (tab: ShipTabId = activeTab) => {
+    if (tab === 'telemetry') {
       return (
         <section className="shipOsTelemetryWorkspace" aria-label="ShipOS telemetry workspace">
           <section className="shipOsPanel shipOsTelemetryCommand">
@@ -8601,7 +7820,6 @@ export function ShipOSPage({
             <div className="shipOsActionRow shipOsTelemetryPrimaryActions">
               <button type="button" onClick={() => pollTelemetryBridge()}>Poll now</button>
               <button type="button" onClick={checkTelemetryBridgeHealth}>Check health</button>
-              <button type="button" onClick={useCloudBridgeEndpoint}>Use EchoBoard relay</button>
               <button type="button" onClick={resetBridgeEndpoint}>Use local bridge</button>
             </div>
           </section>
@@ -8626,8 +7844,8 @@ export function ShipOSPage({
               {telemetryAlerts.length === 0 ? (
                 <article>
                   <span>Clear</span>
-                  <strong>No telemetry alerts</strong>
-                  <p>Reserves, cargo, speed envelope, integrity, and abrupt position changes are within the current watch criteria.</p>
+                  <strong>No alerts from available readings</strong>
+                  <p>Missing readings are unknown, not a confirmation that systems are safe.</p>
                 </article>
               ) : telemetryAlerts.map((alert) => (
                 <article key={`${alert.level}-${alert.label}`} className={alert.level.toLowerCase()}>
@@ -8662,7 +7880,7 @@ export function ShipOSPage({
           </section>
 
           <section className="shipOsPanel shipOsSystems shipOsTelemetrySystems">
-            <header><span>Live Ship Systems</span><strong>{lastTelemetryPacket ? 'Packet driven' : 'Fallback model'}</strong></header>
+            <header><span>Live Ship Systems</span><strong>{lastTelemetryPacket ? 'Packet driven' : 'Awaiting live readings'}</strong></header>
             {displayedShipSystemRows.map((system) => (
               <div key={system.name} className="shipOsMeter">
                 <div><span>{system.name}</span><strong>{system.value}%</strong></div>
@@ -8673,42 +7891,17 @@ export function ShipOSPage({
           </section>
 
           <section className="shipOsPanel shipOsBridgeConsole shipOsTelemetryBridge">
-            <header><span>Relay & Bridge</span><strong>{bridgeConfig.status}</strong></header>
-            <div className={`shipOsRelayAccess ${isSignedIn && canUseRelay ? 'ready' : 'locked'}`}>
-              <div>
-                <span>Remote Device Access</span>
-                <strong>{!isSignedIn ? 'Sign in to EchoBoard Gaming on this device' : canUseRelay ? `${accountName} authorized` : `${accountName} is signed in read-only`}</strong>
-                <small>{!isSignedIn
-                  ? 'Authentication is stored per browser; phones and tablets sign in separately.'
-                  : canUseRelay
-                    ? 'This browser may read the private campaign relay.'
-                    : 'Campaign write access is required for private telemetry.'}</small>
-              </div>
-              {!isSignedIn
-                ? <button type="button" onClick={onSignIn}>Sign in</button>
-                : canUseRelay
-                  ? <button type="button" onClick={useCloudBridgeEndpoint}>Connect relay</button>
-                  : <button type="button" onClick={onSignOut}>Change account</button>}
-            </div>
+            <header><span>Local telemetry reader</span><strong>{bridgeConfig.status}</strong></header>
             <div className="shipOsBridgeEndpointRow">
-              <label><span>Bridge Endpoint</span><input value={bridgeConfig.endpoint} onChange={(event) => setBridgeConfig((current) => ({ ...current, endpoint: event.target.value }))} /></label>
+              <label><span>Bridge Endpoint</span><input value={defaultBridgeEndpoint} readOnly /></label>
               <label className="shipOsCheckRow"><input type="checkbox" checked={Boolean(bridgeConfig.autoPoll)} onChange={(event) => setBridgeConfig((current) => ({ ...current, autoPoll: event.target.checked }))} /><span>Auto poll</span></label>
               <label><span>Seconds</span><input type="number" min="2" max="120" value={bridgePollSeconds} onChange={(event) => setBridgeConfig((current) => ({ ...current, pollSeconds: normalizeBridgePollSeconds(Number(event.target.value)) }))} /></label>
             </div>
             <div className="shipOsActionRow">
               <button type="button" onClick={() => pollTelemetryBridge()}>Poll once</button>
               <button type="button" onClick={checkTelemetryBridgeHealth}>Health check</button>
-              <button type="button" onClick={copyRemoteShipOsLink}>Copy remote link</button>
-              <button type="button" onClick={pairTelemetryRelay} disabled={relayPairingBusy}>{relayPairingBusy ? 'Pairing...' : 'Create relay key'}</button>
+
             </div>
-            {relayPairingKey && (
-              <div className="shipOsRelayPairing" role="status">
-                <span>Relay key / shown once</span>
-                <code>{relayPairingKey}</code>
-                <button type="button" onClick={copyRelayPairingKey}>Copy key</button>
-                <p>Pair this key from the helmet tray helper on the Space Engineers PC.</p>
-              </div>
-            )}
             {bridgeError && <small className="shipOsTelemetryError">{bridgeError}</small>}
             <dl className="shipOsDataList shipOsBridgeDiagnostics">
               <div><dt>Last Success</dt><dd>{bridgeConfig.lastSuccessAt ? new Date(bridgeConfig.lastSuccessAt).toLocaleTimeString() : 'None'}</dd></div>
@@ -8726,17 +7919,12 @@ export function ShipOSPage({
               <strong>Open when configuring the uplink</strong>
             </summary>
             <form className="shipOsTelemetryManualForm" onSubmit={importTelemetryPacket}>
-              <label><span>Telemetry Packet JSON</span><textarea value={telemetryDraft} onChange={(event) => setTelemetryDraft(event.target.value)} placeholder='{"ship":"DSV Intrepid","x":42000,"y":142000,"z":-98000,"speed":0}' /></label>
+              <label><span>Telemetry Packet JSON</span><textarea value={telemetryDraft} onChange={(event) => setTelemetryDraft(event.target.value)} placeholder='Paste a captured local telemetry packet, including its timestamp.' /></label>
               {telemetryError && <small className="shipOsTelemetryError">{telemetryError}</small>}
               <div className="shipOsActionRow">
                 <button type="submit">Import packet</button>
                 <button type="button" onClick={clearTelemetryTrail}>Clear trail</button>
-                <a href="/shipos/addons/intrepid-telemetry-uplink.cs" download>PB script</a>
-                <a href="/shipos/addons/shipos-helper.zip" download>Tray helper</a>
-                <a href="/shipos/addons/start-shipos-helper-tray.cmd" download>Restart helper</a>
-                <a href="/shipos/addons/install-shipos-helper-shortcut.cmd" download>Desktop shortcut</a>
                 <a href="/shipos/addons/shipos-local-telemetry-mod.zip" download>Local mod</a>
-                <a href="/shipos/addons/shipos-client-plugin.zip" download>Client plugin</a>
                 <a href="/shipos/addons/shipos-uplink-readme.md" download>Uplink notes</a>
               </div>
             </form>
@@ -8745,16 +7933,16 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'flight') {
+    if (tab === 'flight') {
       return (
         <section className="shipOsTabGrid">
           <div className="shipOsPanel shipOsOfficerBriefing">
-            <header><span>Kessa Vale / Flight</span><strong>Persistent flight memory</strong></header>
+            <header><span>Flight notes</span><strong>Persistent flight memory</strong></header>
             <dl className="shipOsDataList">
               <div><dt>Current GPS</dt><dd>{formatCoord(currentPosition.x)}:{formatCoord(currentPosition.y)}:{formatCoord(currentPosition.z)}</dd></div>
               <div><dt>Destination</dt><dd>{plannedDestination.name}</dd></div>
-              <div><dt>Range</dt><dd>{formatKm(routeDistance)}</dd></div>
-              <div><dt>ETA</dt><dd>{routeEta}</dd></div>
+              <div><dt>Route</dt><dd>{navigationPlan.destinationId ? formatKm(routeDistance) : 'Not plotted'}</dd></div>
+              <div><dt>ETA</dt><dd>{navigationPlan.destinationId ? routeEta : '—'}</dd></div>
               <div><dt>Known Locations</dt><dd>{locationRecords.length}</dd></div>
               <div><dt>Flight Trail</dt><dd>{telemetryHistory.length} packets</dd></div>
             </dl>
@@ -8777,7 +7965,7 @@ export function ShipOSPage({
             </div>
             <label><span>Route Notes</span><textarea value={navigationPlan.notes} onChange={(event) => setNavigationPlan((current) => ({ ...current, notes: event.target.value }))} /></label>
             <div className="shipOsActionRow">
-              <button type="button" disabled={!selectedContact || selectedContact.id === currentShipContactId} onClick={updateCurrentFromContact}>Move Intrepid to selected contact</button>
+              <button type="button" disabled={!selectedContact || selectedContact.id === currentShipContactId} onClick={updateCurrentFromContact}>Use selected position as manual map origin</button>
               {selectedContact && selectedContact.id !== currentShipContactId && <button type="button" onClick={() => setNavigationDestination(selectedContact)}>Project path to selected contact</button>}
             </div>
           </div>
@@ -8829,7 +8017,7 @@ export function ShipOSPage({
               )}
             </div>
             {selectedLocationRecord && (
-              <article className="shipOsLinkedRecord">
+              <article className="shipOsSimulatedRecord">
                 <span>{selectedLocationRecord.knowledgeState} | {selectedLocationRecord.confidence}</span>
                 <strong>{selectedLocationRecord.name}</strong>
                 <p>{selectedLocationRecord.whyHere}</p>
@@ -8947,18 +8135,18 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'captain') {
+    if (tab === 'captain') {
       return (
         <section className="shipOsCaptainStack" aria-label="Captain command console">
           <details className="shipOsPanel shipOsCaptainDrawer shipOsOfficerBriefing shipOsCaptainBriefing">
-            <summary><span>Captain Hales / Command</span><strong>{commandActionCount} action items</strong></summary>
+            <summary><span>Player / Story overview</span><strong>{commandActionCount} action items</strong></summary>
             <div className="shipOsCaptainDrawerBody">
             <dl className="shipOsDataList">
               <div><dt>Ship Time</dt><dd>{currentShipTime}</dd></div>
               <div><dt>Voyage</dt><dd>{currentVoyageLabel}</dd></div>
               <div><dt>Location</dt><dd>{formatCoord(currentPosition.x)}:{formatCoord(currentPosition.y)}:{formatCoord(currentPosition.z)}</dd></div>
               <div><dt>Destination</dt><dd>{plannedDestination.name}</dd></div>
-              <div><dt>ETA</dt><dd>{routeEta}</dd></div>
+              <div><dt>ETA</dt><dd>{navigationPlan.destinationId ? routeEta : '—'}</dd></div>
               <div><dt>Current Job</dt><dd>{activeJobs[0]?.title ?? 'No active contract'}</dd></div>
               <div><dt>Operational Status</dt><dd>{telemetryAlerts.length ? `${currentOperationalStatus}; ${telemetryAlerts.length} telemetry alert${telemetryAlerts.length === 1 ? '' : 's'}` : currentOperationalStatus}</dd></div>
               <div><dt>Souls Aboard</dt><dd>{currentSoulsAboard} / {activePersonnel} crew / {activePassengerFiles} passengers</dd></div>
@@ -9007,7 +8195,8 @@ export function ShipOSPage({
           </details>
 
           <details className="shipOsPanel shipOsCaptainDrawer shipOsAiCommandPanel">
-            <summary><span>ABIGAIL Command Intelligence</span><strong>{shipOsAiBusy ? '1 task running' : '0 active tasks'}</strong></summary>
+            <summary><span>ABIGAIL · local storytelling AI</span><strong>{shipOsAiBusy ? '1 task running' : '0 active tasks'}</strong></summary>
+            {!shipOsAiModels.length && <p className="betaNotice">AI is optional and currently unconfigured. Set your installed local model in Configuration. All manual RP tools work without it.</p>}
             <form className="shipOsCaptainDrawerBody shipOsAiCommandForm" onSubmit={requestShipOsAiBrief}>
               <div className="shipOsAiCommandControls">
                 <label>
@@ -9024,12 +8213,11 @@ export function ShipOSPage({
               </div>
               <label><span>Command Request</span><textarea value={shipOsAiPrompt} onChange={(event) => setShipOsAiPrompt(event.target.value)} /></label>
               <div className="shipOsActionRow">
-                <button type="submit" disabled={!isSignedIn || shipOsAiBusy || !shipOsAiPrompt.trim()}>{shipOsAiBusy ? 'Analyzing...' : 'Run command analysis'}</button>
+                <button type="submit" disabled={!shipOsAiModels.length || shipOsAiBusy || !shipOsAiPrompt.trim()}>{shipOsAiBusy ? 'Analyzing...' : 'Run command analysis'}</button>
                 {shipOsAiReply && <button type="button" onClick={useShipOsAiReplyAsWave}>Use as EchoMail draft</button>}
               </div>
               {shipOsAiError && <p className="shipOsInlineError" role="alert">{shipOsAiError}</p>}
               {shipOsAiReply && <article className="shipOsAiCommandReply"><span>ABIGAIL / {selectedShipOsAiModel?.displayName ?? 'configured model'}</span><p>{shipOsAiReply}</p></article>}
-              {!isSignedIn && <p>Sign in to EchoBoard to use the server-side model gateway. Provider credentials remain on the server.</p>}
             </form>
           </details>
 
@@ -9057,7 +8245,7 @@ export function ShipOSPage({
               {relayNetworks.map((network) => (
                 <article key={network}>
                   <span>{network}</span>
-                  <strong>{network.includes('OldEarth') || network.includes('Covenant') ? 'Linked' : 'Simulated'}</strong>
+                  <strong>Fictional</strong>
                   <p>Round trip response window: 10 minutes outside game time.</p>
                 </article>
               ))}
@@ -9173,7 +8361,7 @@ export function ShipOSPage({
             <div className="shipOsCoordInputs">
               <label><span>To</span><input value={waveDraft.to} onChange={(event) => setWaveDraft((current) => ({ ...current, to: event.target.value }))} /></label>
               <label><span>Crew copy</span><select value={waveDraft.crewTarget} onChange={(event) => setWaveDraft((current) => ({ ...current, crewTarget: event.target.value }))}><option value="">Ship inbox</option>{crewMembers.map((member) => <option key={member.id} value={member.name}>{member.name}</option>)}</select></label>
-              <label><span>Linked contact</span><select value={waveDraft.contactId} onChange={(event) => setWaveDraft((current) => ({ ...current, contactId: event.target.value }))}><option value="">None</option>{allContacts.filter(hailableContact).map((contact) => <option key={contact.id} value={contact.id}>{contactFileTitle(contact)} | {contactKindLabel(contact.kind)}</option>)}</select></label>
+              <label><span>Simulated contact</span><select value={waveDraft.contactId} onChange={(event) => setWaveDraft((current) => ({ ...current, contactId: event.target.value }))}><option value="">None</option>{allContacts.filter(hailableContact).map((contact) => <option key={contact.id} value={contact.id}>{contactFileTitle(contact)} | {contactKindLabel(contact.kind)}</option>)}</select></label>
             </div>
             <label><span>Subject</span><input value={waveDraft.subject} onChange={(event) => setWaveDraft((current) => ({ ...current, subject: event.target.value }))} /></label>
             <label><span>Message</span><textarea value={waveDraft.body} onChange={(event) => setWaveDraft((current) => ({ ...current, body: event.target.value }))} /></label>
@@ -9202,7 +8390,7 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'navigation') {
+    if (tab === 'navigation') {
       const jumpCount = Math.max(1, Math.ceil(routeDistance / 2000000))
       const reservePercent = Math.max(0, Number(navigationPlan.fuelReserve) || 0)
       return (
@@ -9226,7 +8414,7 @@ export function ShipOSPage({
             </div>
             <label><span>Route Notes</span><textarea value={navigationPlan.notes} onChange={(event) => setNavigationPlan((current) => ({ ...current, notes: event.target.value }))} /></label>
             <div className="shipOsActionRow">
-              <button type="button" disabled={!selectedContact || selectedContact.id === currentShipContactId} onClick={updateCurrentFromContact}>Move Intrepid to selected contact</button>
+              <button type="button" disabled={!selectedContact || selectedContact.id === currentShipContactId} onClick={updateCurrentFromContact}>Use selected position as manual map origin</button>
               {selectedContact && selectedContact.id !== currentShipContactId && <button type="button" onClick={() => setNavigationDestination(selectedContact)}>Project path to selected contact</button>}
             </div>
           </div>
@@ -9308,7 +8496,7 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'chronicle') {
+    if (tab === 'chronicle') {
       return (
         <section className="shipOsTabGrid">
           <div className="shipOsPanel shipOsOfficerBriefing">
@@ -9398,14 +8586,14 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'crew') {
+    if (tab === 'crew') {
       const flightCrewCount = normalizedCrewMembers.filter((member) => member.department === 'Flight' && !['Applicant', 'Candidate'].includes(member.clearance)).length
       const engineeringCrewCount = normalizedCrewMembers.filter((member) => member.department === 'Engineering' && !['Applicant', 'Candidate'].includes(member.clearance)).length
       const medicalCrewCount = normalizedCrewMembers.filter((member) => member.department === 'Medical' && !['Applicant', 'Candidate'].includes(member.clearance)).length
       const billetRows = [
-        { billet: 'Pilot / Flight Officer', department: 'Flight', status: flightCrewCount > 0 ? `${flightCrewCount} assigned` : 'Recruiting', target: 'Kessa Vale primary flight officer', note: 'Flight authority includes stopping unsafe approaches and preserving escape geometry.' },
-        { billet: 'Chief Engineer', department: 'Engineering', status: engineeringCrewCount > 0 ? `${engineeringCrewCount} assigned` : 'Recruiting', target: 'Toren Vask CHENG', note: 'Post-refit proving watch is active with no grounding restriction.' },
-        { billet: 'Ship Doctor', department: 'Medical', status: medicalCrewCount > 0 ? `${medicalCrewCount} assigned` : 'Candidate review', target: 'Dr. Selene Vard ship doctor', note: 'Medical authority governs patient movement, landing acceptability, and transfer abort decisions.' },
+        { billet: 'Pilot / Flight Officer', department: 'Flight', status: flightCrewCount > 0 ? `${flightCrewCount} assigned` : 'Recruiting', target: 'No named pilot assigned', note: 'Flight authority includes stopping unsafe approaches and preserving escape geometry.' },
+        { billet: 'Chief Engineer', department: 'Engineering', status: engineeringCrewCount > 0 ? `${engineeringCrewCount} assigned` : 'Recruiting', target: 'No named engineer assigned', note: 'Record your own engineering observations. No readiness is assumed.' },
+        { billet: 'Ship Doctor', department: 'Medical', status: medicalCrewCount > 0 ? `${medicalCrewCount} assigned` : 'Candidate review', target: 'No named doctor assigned', note: 'Medical authority governs patient movement, landing acceptability, and transfer abort decisions.' },
       ]
       return (
         <section className="shipOsTabGrid">
@@ -9415,9 +8603,9 @@ export function ShipOSPage({
               <div><dt>Monthly Payroll</dt><dd>{formatCredits(personnelPayroll)}</dd></div>
               <div><dt>Passenger Cabins</dt><dd>6 occupied</dd></div>
               <div><dt>Total Berths</dt><dd>18 positions</dd></div>
-              <div><dt>Authority</dt><dd>Mara Sennett</dd></div>
+              <div><dt>Authority</dt><dd>Unassigned</dd></div>
             </dl>
-            <p>Personnel records track billets, clearances, registry standing, medical readiness, quarters, credentials, payroll, and contract status for the Intrepid.</p>
+            <p>Personnel records track billets, clearances, registry standing, medical readiness, quarters, credentials, payroll, and contract status for the player.</p>
           </div>
           <div className="shipOsPanel">
             <header><span>People / Organizations</span><strong>{directoryEntities.length} entities</strong></header>
@@ -9508,7 +8696,7 @@ export function ShipOSPage({
                   {member.notes && <p>{member.notes}</p>}
                   <div className="shipOsActionRow">
                     <button type="button" onClick={() => startEditingCrewMember(member)}>{member.id === editingCrewId ? 'File open' : 'Open file'}</button>
-                    {member.id !== 'crew-hales' && <button type="button" onClick={() => removeCrewMember(member)}>Remove record</button>}
+                    <button type="button" onClick={() => removeCrewMember(member)}>Remove record</button>
                   </div>
                 </article>
               ))}
@@ -9558,9 +8746,9 @@ export function ShipOSPage({
             <header><span>Venture Profile</span><strong>5M operating account</strong></header>
             <dl className="shipOsDataList">
               <div><dt>Captain</dt><dd>{captainName}</dd></div>
-              <div><dt>First Officer</dt><dd>Mara Sennett</dd></div>
+              <div><dt>First Officer</dt><dd>Unassigned</dd></div>
               <div><dt>Cabins</dt><dd>6 passenger / 18 total berths</dd></div>
-              <div><dt>Last Port</dt><dd>Ares / Meridian Naval Works</dd></div>
+              <div><dt>Last Port</dt><dd>Not recorded</dd></div>
               <div><dt>Current Leg</dt><dd>{currentVoyageLabel}</dd></div>
               <div><dt>Souls Aboard</dt><dd>{currentSoulsAboard}: 8 crew / 7 passengers</dd></div>
             </dl>
@@ -9570,17 +8758,17 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'firstOfficer') {
+    if (tab === 'firstOfficer') {
       const firstOfficerBilletRows = [
-        { billet: 'Pilot / Flight Officer', department: 'Flight', status: normalizedCrewMembers.some((member) => member.department === 'Flight' && !['Applicant', 'Candidate'].includes(member.clearance)) ? 'Assigned' : 'Recruiting', target: 'Kessa Vale primary flight officer' },
-        { billet: 'Chief Engineer', department: 'Engineering', status: normalizedCrewMembers.some((member) => member.department === 'Engineering' && !['Applicant', 'Candidate'].includes(member.clearance)) ? 'Assigned' : 'Recruiting', target: 'Toren Vask CHENG' },
-        { billet: 'Ship Doctor', department: 'Medical', status: normalizedCrewMembers.some((member) => member.department === 'Medical' && !['Applicant', 'Candidate'].includes(member.clearance)) ? 'Assigned' : 'Candidate review', target: 'Dr. Selene Vard ship doctor' },
+        { billet: 'Pilot / Flight Officer', department: 'Flight', status: normalizedCrewMembers.some((member) => member.department === 'Flight' && !['Applicant', 'Candidate'].includes(member.clearance)) ? 'Assigned' : 'Recruiting', target: 'No named pilot assigned' },
+        { billet: 'Chief Engineer', department: 'Engineering', status: normalizedCrewMembers.some((member) => member.department === 'Engineering' && !['Applicant', 'Candidate'].includes(member.clearance)) ? 'Assigned' : 'Recruiting', target: 'No named engineer assigned' },
+        { billet: 'Ship Doctor', department: 'Medical', status: normalizedCrewMembers.some((member) => member.department === 'Medical' && !['Applicant', 'Candidate'].includes(member.clearance)) ? 'Assigned' : 'Candidate review', target: 'No named doctor assigned' },
       ]
 
       return (
         <section className="shipOsTabGrid">
           <div className="shipOsPanel shipOsOfficerBriefing">
-            <header><span>Mara Sennett / First Officer</span><strong>Operations and commercial control</strong></header>
+            <header><span>Operations</span><strong>Operations and commercial control</strong></header>
             <dl className="shipOsDataList">
               <div><dt>Active Jobs</dt><dd>{activeJobs.length}</dd></div>
               <div><dt>Active Passengers</dt><dd>{activePassengerFiles}</dd></div>
@@ -9597,9 +8785,9 @@ export function ShipOSPage({
               <div><dt>Monthly Payroll</dt><dd>{formatCredits(personnelPayroll)}</dd></div>
               <div><dt>Passenger Cabins</dt><dd>6 occupied</dd></div>
               <div><dt>Total Berths</dt><dd>18 positions</dd></div>
-              <div><dt>Authority</dt><dd>Mara Sennett</dd></div>
+              <div><dt>Authority</dt><dd>Unassigned</dd></div>
             </dl>
-            <p>Personnel records track billets, clearances, registry standing, medical readiness, quarters, credentials, payroll, and contract status for the Intrepid.</p>
+            <p>Personnel records track billets, clearances, registry standing, medical readiness, quarters, credentials, payroll, and contract status for the player.</p>
           </div>
           <div className="shipOsPanel shipOsBankCommand">
             <header><span>Operating Bank</span><strong>{formatCredits(operatingBalance)}</strong></header>
@@ -9671,7 +8859,7 @@ export function ShipOSPage({
                   <small>{member.contractStatus} | {member.credentials?.join(' | ')}</small>
                   <div className="shipOsActionRow">
                     <button type="button" onClick={() => startEditingCrewMember(member)}>{member.id === editingCrewId ? 'File open' : 'Open file'}</button>
-                    {member.id !== 'crew-hales' && <button type="button" onClick={() => removeCrewMember(member)}>Remove record</button>}
+                    <button type="button" onClick={() => removeCrewMember(member)}>Remove record</button>
                   </div>
                 </article>
               ))}
@@ -9906,19 +9094,19 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'medical') {
+    if (tab === 'medical') {
       const medicalJobRows = jobOpsRows.filter(({ job }) => /medical|clinic|patient|trauma|hospital/i.test(`${job.title} ${job.client} ${job.notes}`))
       const medicalPassengerRows = passengerFiles.filter((file) => file.medical && !/no flag|no personal flag/i.test(file.medical))
       return (
         <section className="shipOsTabGrid">
           <div className="shipOsPanel shipOsOfficerBriefing">
-            <header><span>Dr. Selene Vard / Medical</span><strong>Facility capability directory</strong></header>
+            <header><span>Medical notes</span><strong>Facility capability directory</strong></header>
             <dl className="shipOsDataList">
               <div><dt>Known Facilities</dt><dd>{medicalFacilities.length}</dd></div>
               <div><dt>Medical Jobs</dt><dd>{medicalJobRows.length}</dd></div>
               <div><dt>Flagged Pax</dt><dd>{medicalPassengerRows.length}</dd></div>
               <div><dt>Current Destination</dt><dd>{plannedDestination.name}</dd></div>
-              <div><dt>ETA</dt><dd>{routeEta}</dd></div>
+              <div><dt>ETA</dt><dd>{navigationPlan.destinationId ? routeEta : '—'}</dd></div>
               <div><dt>Authority</dt><dd>Medical may abort unsafe transfer</dd></div>
             </dl>
             <p>Medical starts as a facility-capability directory, not a shipwide patient chart. Sensitive patient data stays summarized unless a later permission layer exposes it.</p>
@@ -9991,7 +9179,7 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'security') {
+    if (tab === 'security') {
       const threatContacts = nearbyContacts.filter(({ contact }) => isHostileContact(contact) || contactIffFilterId(contact) === 'unknown').slice(0, 12)
       return (
         <section className="shipOsTabGrid">
@@ -10050,7 +9238,7 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'steward') {
+    if (tab === 'steward') {
       return (
         <section className="shipOsTabGrid">
           <div className="shipOsPanel shipOsOfficerBriefing">
@@ -10109,11 +9297,11 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'surveyAid') {
+    if (tab === 'surveyAid') {
       return (
         <section className="shipOsTabGrid">
           <div className="shipOsPanel shipOsOfficerBriefing">
-            <header><span>Renn Harrow / Survey & Aid</span><strong>Carthage field verification</strong></header>
+            <header><span>Survey & Aid</span><strong>Star System field verification</strong></header>
             <dl className="shipOsDataList">
               <div><dt>Relief Authority</dt><dd>{formatCredits(reliefAuthorityBudget)}</dd></div>
               <div><dt>Volunteers</dt><dd>{reliefVolunteerBreakdown.reduce((total, row) => total + row.count, 0)}</dd></div>
@@ -10124,7 +9312,7 @@ export function ShipOSPage({
               <div><dt>Verified Locations</dt><dd>{locationRecords.filter((location) => /verified|surveyed/i.test(`${location.knowledgeState} ${location.confidence}`)).length}</dd></div>
               <div><dt>Ship Operating Funds</dt><dd>{formatCredits(operatingBalance)}</dd></div>
             </dl>
-            <p>The Carthage Provisional Relief Authority is separate from Intrepid operating capital. Aid should release only against verified need, local authority, maintenance capability, and a real missing capability.</p>
+            <p>No aid organization, budget, or volunteers exist until you add them to your story. Record observed needs separately from proposed fiction.</p>
           </div>
           <div className="shipOsPanel">
             <header><span>Crew Liaison Credential</span><strong>{rennHarrowCrewProfile.name}</strong></header>
@@ -10137,7 +9325,7 @@ export function ShipOSPage({
             <p>{rennHarrowCrewProfile.authority}</p>
           </div>
           <div className="shipOsPanel">
-            <header><span>Port Pico Volunteer Pool</span><strong>{reliefVolunteerBreakdown.reduce((total, row) => total + row.count, 0)}</strong></header>
+            <header><span>Volunteer pool (not established)</span><strong>{reliefVolunteerBreakdown.reduce((total, row) => total + row.count, 0)}</strong></header>
             <div className="shipOsMemoryList">
               {reliefVolunteerBreakdown.map((row) => (
                 <article key={row.specialty}>
@@ -10155,7 +9343,7 @@ export function ShipOSPage({
                 <article key={field}>
                   <span>Survey Field</span>
                   <strong>{field}</strong>
-                  <p>Renn can feed this into a future Aid Project Packet once observed or verified.</p>
+                  <p>Add observed evidence to your own survey notes.</p>
                 </article>
               ))}
             </div>
@@ -10180,7 +9368,7 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'metagame') {
+    if (tab === 'metagame') {
       const previewPortrait: GeneratedPortrait = {
         id: editingGeneratedPortraitId ?? 'portrait-maker-preview',
         name: portraitMakerDraft.name.trim() || 'Portrait Preview',
@@ -10222,7 +9410,7 @@ export function ShipOSPage({
                 <div><dt>Accent</dt><dd>{portraitMakerDraft.accentColor}</dd></div>
               </dl>
             </div>
-            <label><span>Portrait Name</span><input value={portraitMakerDraft.name} onChange={(event) => setPortraitMakerDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Example: Ares dockside medic" /></label>
+            <label><span>Portrait Name</span><input value={portraitMakerDraft.name} onChange={(event) => setPortraitMakerDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Example: settlement medic" /></label>
             <div className="shipOsCoordInputs">
               <label><span>Hair Style</span><select value={portraitMakerDraft.hairStyle} onChange={(event) => setPortraitMakerDraft((current) => ({ ...current, hairStyle: event.target.value as GeneratedPortrait['hairStyle'] }))}>
                 <option value="swept">Swept</option>
@@ -10289,7 +9477,7 @@ export function ShipOSPage({
 
           <form className="shipOsPanel shipOsMetagameForm" onSubmit={saveMetagameRecord}>
             <header><span>Behind Scenes Record</span><strong>{editingMetagameRecord ? 'Editing' : 'New file'}</strong></header>
-            <label><span>Name</span><input value={metagameDraft.name} onChange={(event) => setMetagameDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Example: Pelagos rumor source" /></label>
+            <label><span>Name</span><input value={metagameDraft.name} onChange={(event) => setMetagameDraft((current) => ({ ...current, name: event.target.value }))} placeholder="Example: settlement rumor source" /></label>
             <div className="shipOsCoordInputs">
               <label><span>Kind</span><select value={metagameDraft.kind} onChange={(event) => setMetagameDraft((current) => ({ ...current, kind: event.target.value as MetagameRecord['kind'] }))}>{metagameKinds.map((kind) => <option key={kind}>{kind}</option>)}</select></label>
               <label><span>Visibility</span><select value={metagameDraft.visibility} onChange={(event) => setMetagameDraft((current) => ({ ...current, visibility: event.target.value as MetagameRecord['visibility'] }))}>{metagameVisibilities.map((visibility) => <option key={visibility}>{visibility}</option>)}</select></label>
@@ -10331,7 +9519,7 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'logs') {
+    if (tab === 'logs') {
       return (
         <section className="shipOsTabGrid">
           <div className="shipOsPanel">
@@ -10361,7 +9549,7 @@ export function ShipOSPage({
       )
     }
 
-    if (activeTab === 'bank') {
+    if (tab === 'bank') {
       return (
         <section className="shipOsTabGrid">
           <div className="shipOsPanel shipOsBankCommand">
@@ -10373,7 +9561,7 @@ export function ShipOSPage({
               <div><dt>Recurring Burn</dt><dd>{formatCredits(recurringMonthlyBurn)} / mo</dd></div>
             </dl>
             <label><span>Ledger Month</span><input type="month" value={bankMonth} onChange={(event) => setBankMonth(event.target.value || currentMonthKey())} /></label>
-            <p>Tracks the Intrepid venture account, monthly payroll, docking costs, passenger income, cargo revenue, refit spending, and recurring obligations.</p>
+            <p>Tracks the player venture account, monthly payroll, docking costs, passenger income, cargo revenue, refit spending, and recurring obligations.</p>
           </div>
           <div className="shipOsPanel">
             <header><span>Operational Money Links</span><strong>{jobRelationshipRows.reduce((total, row) => total + row.transactionCount, 0)} linked</strong></header>
@@ -10446,12 +9634,12 @@ export function ShipOSPage({
     return (
       <section className="shipOsTabGrid">
         <div className="shipOsPanel shipOsOfficerBriefing">
-          <header><span>Toren Vask / Engineering</span><strong>Configuration control and material readiness</strong></header>
+          <header><span>Engineering</span><strong>Configuration control and material readiness</strong></header>
           <dl className="shipOsDataList">
             <div><dt>Configurations</dt><dd>{shipConfigurations.length}</dd></div>
             <div><dt>Squawks</dt><dd>{engineeringOpenSquawkCount} open / {engineeringWatchSquawkCount} watch / {groundingSquawkCount} grounding</dd></div>
             <div><dt>Blueprints</dt><dd>{blueprintSnapshots.length}</dd></div>
-            <div><dt>Latest Revision</dt><dd>{shipConfigurations[shipConfigurations.length - 1]?.version ?? 'INT-0001'}</dd></div>
+            <div><dt>Latest Revision</dt><dd>{shipConfigurations[shipConfigurations.length - 1]?.version ?? 'No configuration recorded'}</dd></div>
           </dl>
           <p>Engineering retains the ship's technical memory: approved configurations, unresolved squawks, refit history, and blueprint structure. Live operations and bridge diagnostics are isolated in Telemetry.</p>
           <div className="shipOsActionRow">
@@ -10459,7 +9647,7 @@ export function ShipOSPage({
           </div>
         </div>
         <div className="shipOsPanel">
-          <header><span>Ship Configuration</span><strong>{shipConfigurations[shipConfigurations.length - 1]?.version ?? 'INT-0001'}</strong></header>
+          <header><span>Ship Configuration</span><strong>{shipConfigurations[shipConfigurations.length - 1]?.version ?? 'No configuration recorded'}</strong></header>
           <div className="shipOsMemoryList">
             {shipConfigurations.map((config) => (
               <article key={config.id}>
@@ -10535,7 +9723,7 @@ export function ShipOSPage({
               <div><dt>Jump Drives</dt><dd>{latestBlueprint.jumpDriveCount}</dd></div>
             </dl>
           ) : (
-            <p>When you upload the Intrepid blueprint, ShipOS will extract grid count, block count, control seats, thrusters, gyros, cargo, power, connectors, and jump drives.</p>
+            <p>When you upload the player blueprint, ShipOS will extract grid count, block count, control seats, thrusters, gyros, cargo, power, connectors, and jump drives.</p>
           )}
           <div className="shipOsBlueprintList">
             {blueprintSnapshots.slice(0, 4).map((snapshot) => (
@@ -10552,81 +9740,16 @@ export function ShipOSPage({
     )
   }
 
-  return (
-    <main className={`shipOsFullPage${isNavigationExperience ? ' shipOsNavigationExperience' : ''}`} style={shipOsDisplayStyle}>
-      <header className="shipOsTopBar">
-        {!isNavigationExperience && <button type="button" onClick={onBack}>The Campaign Hall / Arcade</button>}
-        <div>
-          <span>{isNavigationExperience ? 'Free navigation companion' : 'Echoboard Gaming Space'}</span>
-          <h1>{isNavigationExperience ? 'ShipOS Navigation' : 'ShipOS Command Computer'}</h1>
-          <p>{isNavigationExperience
-            ? 'Live planetary mapping, contacts, routes, and vessel telemetry.'
-            : 'Carthage campaign command surface for mapping, waves, crew, passengers, cargo, logs, and ship systems aboard the Intrepid.'}</p>
-        </div>
-        <div className="shipOsTopBarStatus">
-          <strong>{shipName}</strong>
-          <small>{stateSyncStatus}</small>
-        </div>
-        {!isNavigationExperience && <div className={`shipOsTopBarAccount${isSignedIn ? ' signedIn' : ''}`} aria-label="EchoBoard Gaming account">
-          <div>
-            <span>EchoBoard Account</span>
-            <strong>{isSignedIn ? accountName : 'This device is signed out'}</strong>
-            <small>{isSignedIn ? accountMode : 'Sign in for remote telemetry'}</small>
-          </div>
-          <button type="button" onClick={isSignedIn ? onSignOut : onSignIn}>{isSignedIn ? 'Sign out' : 'Sign in'}</button>
-        </div>}
-      </header>
-
-      {!isNavigationExperience && <nav className="shipOsTabs" aria-label="ShipOS tabs">
-        {shipTabGroups.map((group) => (
-          <section className={`shipOsTabGroup shipOsTabGroup-${group.id}`} key={group.id} aria-label={`${group.label} consoles`}>
-            <span>{group.label}</span>
-            <div>
-              {group.tabs.map((tab) => (
-                <button type="button" key={tab.id} className={activeTab === tab.id ? 'active' : ''} aria-current={activeTab === tab.id ? 'page' : undefined} aria-pressed={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </section>
-        ))}
-      </nav>}
-
-      <details
-        className="shipOsMapDeck shipOsMapDrawer"
-        aria-label="ShipOS star map and velocity telemetry"
-        open={isNavigationExperience || mapDrawerOpen}
-        onToggle={(event) => {
-          if (!isNavigationExperience) setMapDrawerOpen(event.currentTarget.open)
-        }}
-      >
-        <summary className="shipOsMapDrawerSummary">
-          <div className="shipOsMapDrawerTitle">
-            <span>{isNavigationExperience ? 'Local star-system chart' : 'Carthage / Star System sandbox preset'}</span>
-            <strong>Sensor Map & Velocity Telemetry</strong>
-          </div>
-          <dl className="shipOsMapDrawerStatus" aria-label="Current navigation summary">
-            <div><dt>Contacts</dt><dd>{visibleContacts.length} / {allContacts.length}</dd></div>
-            <div><dt>Range</dt><dd>{formatKm(routeDistance)}</dd></div>
-            <div><dt>ETA</dt><dd>{routeEta}</dd></div>
-            <div><dt>Planet Scale</dt><dd>{bodyScaleMode === 'true-scale' ? 'True SE' : 'Tactical'}</dd></div>
-          </dl>
-          <b className="shipOsMapDrawerCue" aria-hidden="true">
-            <span className="shipOsMapDrawerClosed">Open Drawer</span>
-            <span className="shipOsMapDrawerOpen">Close Drawer</span>
-          </b>
-        </summary>
-        {mapDrawerOpen && <div className="shipOsMapDrawerBody">
-          <div className="shipOsMapHeader">
+  const mapControls = (<>          <div className="shipOsMapHeader">
             <div className="shipOsMapTitleBlock">
-              <span>{isNavigationExperience ? 'Local star-system chart' : 'Carthage / Star System sandbox preset'}</span>
+              <span>{isNavigationExperience ? 'Local star-system chart' : 'Local Star System chart'}</span>
               <h2>{mapCameraMode === 'forward' ? 'Forward Sensor View' : 'Orbital Sensor Map'}</h2>
               <div className="shipOsMapFocusControls">
                 <div className="shipOsMapControlRow">
-                  <button type="button" onClick={focusIntrepidOnMap}>{isNavigationExperience ? 'Return to vessel' : 'Return to Intrepid'}</button>
+                  <button type="button" onClick={focusplayerOnMap}>{isNavigationExperience ? 'Return to player' : 'Return to player'}</button>
                   <div className="shipOsMapScaleControls shipOsMapViewControls" role="group" aria-label="Map camera view">
                     <b>Camera</b>
-                    <button type="button" className={mapCameraMode === 'overhead' ? 'active' : ''} aria-pressed={mapCameraMode === 'overhead'} onClick={focusIntrepidOnMap}>Overhead</button>
+                    <button type="button" className={mapCameraMode === 'overhead' ? 'active' : ''} aria-pressed={mapCameraMode === 'overhead'} onClick={focusplayerOnMap}>Overhead</button>
                     <button type="button" className={mapCameraMode === 'forward' ? 'active' : ''} aria-pressed={mapCameraMode === 'forward'} onClick={showForwardMapView}>Forward</button>
                   </div>
                   <div className="shipOsMapScaleControls" aria-label="Planet scale mode">
@@ -10646,7 +9769,7 @@ export function ShipOSPage({
               <div><dt>Current Z</dt><dd>{formatCoord(currentPosition.z)}</dd></div>
               <div><dt>Projected Path</dt><dd>{plannedDestination.name}</dd></div>
               <div><dt>Range</dt><dd>{formatKm(routeDistance)}</dd></div>
-              <div><dt>ETA</dt><dd>{routeEta}</dd></div>
+              <div><dt>ETA</dt><dd>{navigationPlan.destinationId ? routeEta : '—'}</dd></div>
               <div><dt>Chart</dt><dd>{calibratedBodyCount ? `${calibratedBodyCount} calibrated` : 'Preset'} / {bodyScaleMode === 'true-scale' ? 'True SE' : 'Tactical'}</dd></div>
             </dl>
           </div>
@@ -10663,8 +9786,8 @@ export function ShipOSPage({
             onSetAll={setAllContactFilters}
             onToggleMemory={setEncounterMemoryVisible}
           />
-          <ShipSystemMap contacts={visibleContacts} encounterMemory={visibleEncounterMemory} systemBodies={calibratedStarSystemBodies} currentPosition={currentPosition} currentShipContact={currentShipContact} flightRoutes={flightRoutes} focusContactId={mapFocusContactIsVisible ? mapFocusContact.id : currentShipContactId} focusRequestId={mapFocusRequest} projectedContact={plannedDestination} selectedContactId={selectedContactId} bodyScaleMode={bodyScaleMode} cameraMode={mapCameraMode} onSelectContact={handleSelectContact} telemetryTrail={telemetryHistory} />
-          <section className="shipOsTacticalCommandBar" aria-label="Tactical alarm controls">
+</>)
+  const alarmControls = (<>          <section className="shipOsTacticalCommandBar" aria-label="Tactical alarm controls">
             <button
               type="button"
               className={`shipOsMasterAlarm shipOsMasterAlarm-${masterAlarm.level}`}
@@ -10688,10 +9811,10 @@ export function ShipOSPage({
               className={`shipOsAlarmSoundUplink ${alarmSoundUplinkEnabled ? 'active' : ''}`}
               aria-pressed={alarmSoundUplinkEnabled}
               onClick={toggleAlarmSoundUplink}
-              title="Arms ShipOS alarm-output requests. The game-side sound-block command channel is the next bridge evolution."
+              title="Local browser alarm preference only. No game sound-block command channel is connected."
             >
-              <span>Alarm Sound</span>
-              <strong>Uplink {alarmSoundUplinkEnabled ? 'Enabled' : 'Disabled'}</strong>
+              <span>Local Alarm Preference</span>
+              <strong>Preference {alarmSoundUplinkEnabled ? 'Enabled' : 'Disabled'}</strong>
             </button>
             <output aria-live="polite">
               <span>{masterAlarm.level === 'critical' ? 'Warning' : masterAlarm.level === 'caution' ? 'Caution' : 'Watch'}</span>
@@ -10699,7 +9822,116 @@ export function ShipOSPage({
               <small>AGL {formatAltitude(alarmFlightDirector.surfaceAltitude)} / nearest asteroid {formatAltitude(nearestAsteroidRange)}</small>
             </output>
           </section>
-          <ShipFlightDirector packet={lastTelemetryPacket} currentPosition={currentPosition} bodies={calibratedStarSystemBodies} />
+</>)
+  const displayControls = (<>      <details className="shipOsPanel shipOsUtilityDrawer shipOsDisplayPanel" aria-label="Visibility and typography settings">
+        <summary><span>Visibility & Typography</span><strong>{displayFontSize}px / {displayFontFace.label}</strong></summary>
+        <div className="shipOsUtilityDrawerBody">
+        <div className="shipOsDisplayControls">
+          <label className="shipOsFontSizeControl">
+            <span>Interface Text Size</span>
+            <div>
+              <button type="button" aria-label="Decrease interface text size" disabled={displayFontSize <= 10} onClick={() => setDisplayPreferences((current) => ({ ...current, fontSize: Math.max(10, displayFontSize - 1) }))}>-</button>
+              <input type="range" min="10" max="18" step="1" value={displayFontSize} onChange={(event) => setDisplayPreferences((current) => ({ ...current, fontSize: Number(event.target.value) }))} />
+              <output aria-live="polite">{displayFontSize}px</output>
+              <button type="button" aria-label="Increase interface text size" disabled={displayFontSize >= 18} onClick={() => setDisplayPreferences((current) => ({ ...current, fontSize: Math.min(18, displayFontSize + 1) }))}>+</button>
+            </div>
+          </label>
+          <fieldset className="shipOsFontFaceControl">
+            <legend>Typeface</legend>
+            <div>
+              {shipOsFontFaceOptions.map((option) => (
+                <button key={option.id} type="button" className={displayFontFace.id === option.id ? 'active' : ''} aria-pressed={displayFontFace.id === option.id} onClick={() => setDisplayPreferences((current) => ({ ...current, fontFace: option.id }))}>{option.label}</button>
+              ))}
+            </div>
+          </fieldset>
+          <button type="button" className="shipOsDisplayReset" onClick={() => setDisplayPreferences(defaultShipOsDisplayPreferences)}>Reset display</button>
+        </div>
+        </div>
+      </details></>)
+  return (
+    <main className={`shipOsFullPage${isNavigationExperience ? ' shipOsNavigationExperience' : ''}`} style={shipOsDisplayStyle}>
+      <header className="shipOsTopBar">
+        <div>
+          <span>Local single-player beta</span>
+          <h1>{isNavigationExperience ? 'Telemetry' : 'Storytelling'}</h1>
+<p>{isNavigationExperience ? "Your game, at a glance. Last-known readings are marked when stale." : "Experimental RP workspace. Everything here is your fiction, not a game action."}</p>
+        </div>
+        <div className="shipOsTopBarStatus">
+          <strong>{lastTelemetryPacket?.ship || "Awaiting game telemetry"}</strong>
+          <small>{stateSyncStatus}</small>
+        </div>
+      </header>
+
+      {!isNavigationExperience && <nav className="shipOsTabs" aria-label="ShipOS tabs">
+        {shipTabGroups.map((group) => (
+          <section className={`shipOsTabGroup shipOsTabGroup-${group.id}`} key={group.id} aria-label={`${group.label} consoles`}>
+            <span>{group.label}</span>
+            <div>
+              {group.tabs.map((tab) => (
+                <button type="button" key={tab.id} className={activeTab === tab.id ? 'active' : ''} aria-current={activeTab === tab.id ? 'page' : undefined} aria-pressed={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+      </nav>}
+
+      <section className="betaFocusBar" aria-label="Telemetry focus">
+        <label htmlFor="telemetry-focus">Focus<select id="telemetry-focus" value={focusedGrid?.id ?? currentShipContactId} onChange={event => refocusTelemetry(event.target.value)}>
+          <option value={currentShipContactId}>Player{lastTelemetryPacket?.controlMode === 'character' ? ' — on foot' : lastTelemetryPacket?.grid ? ` — ${lastTelemetryPacket.grid}` : ''}</option>
+          {fleet.map(grid => <option key={grid.id} value={grid.id}>{fleetLabel(grid)}</option>)}
+        </select></label>
+        <button type="button" className="betaPrimary" onClick={() => refocusTelemetry()} disabled={!lastTelemetryPacket}>Refocus</button>
+        <span>{fleet.length} tagged friendly {fleet.length === 1 ? 'grid' : 'grids'} · <code>[ShipOS]</code></span>
+      </section>
+      {focusNotice && <p role="status" className="betaNotice">{focusNotice}</p>}
+      {lastTelemetryPacket && !lastTelemetryPacket.fleet && <p className="betaMuted">Fleet telemetry needs the updated local mod. Save and reload your world after installing it.</p>}
+      {Number(lastTelemetryPacket?.fleetEligibleCount) > fleet.length && <p className="betaNotice">Showing the nearest {fleet.length} of {lastTelemetryPacket?.fleetEligibleCount} eligible grids (beta limit: 128).</p>}
+      {isNavigationExperience && <dl className="betaTelemetryStrip" aria-label={`Readings for ${focusedGrid?.name || 'Player'}`}>
+        <div><dt>Packet</dt><dd>{telemetryPacketAgeLabel(displayTelemetry?.stamp)}</dd></div>
+        <div><dt>Speed</dt><dd>{formatMetersPerSecond(displayTelemetry?.speed)}</dd></div>
+        <div><dt>Altitude AGL</dt><dd>{formatAltitude(displayTelemetry?.surfaceAltitude)}</dd></div>
+        <div><dt>Vertical</dt><dd>{formatSignedSpeed(displayTelemetry?.verticalSpeed)}</dd></div>
+        <div><dt>Gravity</dt><dd>{Number.isFinite(displayTelemetry?.naturalGravity) ? Number(displayTelemetry?.naturalGravity).toFixed(2) + ' g' : 'Unknown'}</dd></div>
+        <div><dt>Contacts</dt><dd>{lastTelemetryPacket ? visibleContacts.length : '—'}</dd></div>
+      </dl>}
+      {focusedGrid && <dl className="betaFleetReadings" aria-label="Selected grid systems">
+        <div><dt>Battery</dt><dd>{Number.isFinite(focusedGrid.batteryPercent) ? focusedGrid.batteryPercent!.toFixed(1) + '%' : 'Not reported'}</dd></div>
+        <div><dt>Cargo containers</dt><dd>{Number.isFinite(focusedGrid.cargoPercent) ? focusedGrid.cargoPercent!.toFixed(1) + '%' : 'Not reported'}</dd></div>
+        <div><dt>Non-functional blocks</dt><dd>{focusedGrid.nonFunctionalBlockCount ?? 'Unknown'}</dd></div>
+        <div><dt>Position XYZ · m</dt><dd>{formatCoord(focusedGrid.x)} / {formatCoord(focusedGrid.y)} / {formatCoord(focusedGrid.z)}</dd></div>
+      </dl>}
+      <details
+        className="shipOsMapDeck shipOsMapDrawer"
+        aria-label="ShipOS star map and velocity telemetry"
+        open={isNavigationExperience || mapDrawerOpen}
+        onToggle={(event) => {
+          if (!isNavigationExperience) setMapDrawerOpen(event.currentTarget.open)
+        }}
+      >
+        <summary className="shipOsMapDrawerSummary">
+          <div className="shipOsMapDrawerTitle">
+            <span>{isNavigationExperience ? 'Local star-system chart' : 'Local Star System chart'}</span>
+            <strong>Planetary map & nearby contacts</strong>
+          </div>
+          <dl className="shipOsMapDrawerStatus" aria-label="Current navigation summary">
+            <div><dt>Contacts</dt><dd>{visibleContacts.length} / {allContacts.length}</dd></div>
+            <div><dt>Range</dt><dd>{formatKm(routeDistance)}</dd></div>
+            <div><dt>ETA</dt><dd>{navigationPlan.destinationId ? routeEta : '—'}</dd></div>
+            <div><dt>Planet Scale</dt><dd>{bodyScaleMode === 'true-scale' ? 'True SE' : 'Tactical'}</dd></div>
+          </dl>
+          <b className="shipOsMapDrawerCue" aria-hidden="true">
+            <span className="shipOsMapDrawerClosed">Open Drawer</span>
+            <span className="shipOsMapDrawerOpen">Close Drawer</span>
+          </b>
+        </summary>
+        {(mapDrawerOpen || isNavigationExperience) && <div className="shipOsMapDrawerBody">
+          {!lastTelemetryPacket && <p className="betaNotice">Waiting for game telemetry. No position, vessel, or sensor readings are assumed.</p>}
+          {lastTelemetryPacket && <>
+          <ShipSystemMap contacts={visibleContacts} encounterMemory={visibleEncounterMemory} systemBodies={calibratedStarSystemBodies.filter(body => planetaryChartOverrides[body.id])} currentPosition={currentPosition} currentShipContact={currentShipContact} flightRoutes={flightRoutes} focusContactId={mapFocusContactIsVisible ? mapFocusContact.id : currentShipContactId} focusRequestId={mapFocusRequest} projectedContact={navigationPlan.destinationId ? plannedDestination : null} selectedContactId={selectedContactId} bodyScaleMode={bodyScaleMode} cameraMode={mapCameraMode} onSelectContact={handleSelectContact} telemetryTrail={telemetryHistory} />
+          <details className="betaFlightDetail"><summary>Flight instruments & contact detail</summary>
+          <ShipFlightDirector packet={displayTelemetry} currentPosition={displayPosition} bodies={calibratedStarSystemBodies} />
           <section className="shipOsVelocityTelemetry" aria-label="Relative and absolute velocity telemetry">
             <header>
               <div>
@@ -10764,10 +9996,28 @@ export function ShipOSPage({
             </div>
             <p>Absolute speed is each object relative to the game world. Relative speed and range rate are calculated against the current vessel; negative range rate is closing, positive range rate is opening.</p>
           </section>
+          </details></>}
         </div>}
       </details>
 
-      {!isNavigationExperience && renderTab()}
+      {!isNavigationExperience && <fieldset className="betaStoryFields" disabled={readOnly}>{renderTab()}</fieldset>}
+      {!isNavigationExperience && <details className="betaConfiguration"><summary>Story files <small>Locations · directory · ship configuration · medical · security · supplies</small></summary><fieldset className="betaStoryFields" disabled={readOnly}>
+        <RecordEditor title="Locations" records={savedLocationRecords} setRecords={setSavedLocationRecords} template={{ id: '', name: '', body: '', className: '', x: 0, y: 0, z: 0, knowledgeState: 'OBSERVED', confidence: 'PROBABLE', altitude: '', gravity: '', atmosphere: '', landingSuitability: '', approachNotes: '', hazards: '', previousVisits: [], knownRoutes: [], pilotAnnotations: '', whyHere: '', relatedJobIds: [], relatedEntityIds: [], updatedAt: Date.now() } satisfies LocationRecord} choices={{ knowledgeState: ['DETECTED','OBSERVED','SURVEYED','VERIFIED','DISPUTED','OBSOLETE','DESTROYED'], confidence: ['CONFIRMED','PROBABLE','RUMOR','DISPUTED'] }} />
+        <RecordEditor title="People & organizations" records={directoryEntities} setRecords={setDirectoryEntities} template={{ id: '', kind: 'Person', name: '', role: '', relationship: '', standing: 'PROBABLE', privacy: 'Shipboard', locationIds: [], jobIds: [], notes: '' } satisfies DirectoryEntity} choices={{ kind: ['Person','Organization','Ship','Faction'], standing: ['CONFIRMED','PROBABLE','RUMOR','DISPUTED'], privacy: ['Public','Shipboard','Sensitive'] }} />
+        <RecordEditor title="Ship configuration history" records={shipConfigurations} setRecords={setShipConfigurations} template={{ id: '', version: '', date: currentIsoDate(), change: '', reason: '', shipyard: '', engineer: '', cost: 0, notes: '' } satisfies ShipConfigurationRecord} />
+        <RecordEditor title="Medical facilities" records={medicalFacilities} setRecords={setMedicalFacilities} template={{ id: '', name: '', locationId: '', access: '', capabilities: [], travelNote: '', notes: '' } satisfies MedicalFacilityRecord} />
+        <RecordEditor title="Security incidents" records={securityIncidents} setRecords={setSecurityIncidents} template={{ id: '', title: '', locationId: '', confidence: 'PROBABLE', permission: 'Shipboard', involved: [], outcome: '', notes: '' } satisfies SecurityIncidentRecord} choices={{ confidence: ['CONFIRMED','PROBABLE','RUMOR','DISPUTED'], permission: ['Public','Shipboard','Sensitive'] }} />
+        <RecordEditor title="Supplies" records={storesRecords} setRecords={setStoresRecords} template={{ id: '', item: '', quantity: 0, unit: '', storage: '', desiredMinimum: 0, purchaseLocation: '', lastPrice: 0, expiration: '', notes: '' } satisfies StoresRecord} />
+      </fieldset></details>}
+      <details className="betaConfiguration" open={new URLSearchParams(window.location.search).get('share') === 'ipad' ? true : undefined}>
+        <summary>Configuration <small>Sharing · local AI · backups · map · diagnostics · display</small></summary>
+        {configuration}
+        <details><summary>Map options & contact filters</summary>{mapControls}</details>
+        <details><summary>Telemetry diagnostics & manual tools</summary>{renderTab('telemetry')}</details>
+        <details><summary>Navigation, GPS & route planning</summary>{renderTab('navigation')}</details>
+        <details><summary>Local alarm tests</summary>{alarmControls}</details>
+        {displayControls}
+      </details>
 
       {!isNavigationExperience && <details className="shipOsPanel shipOsUtilityDrawer shipOsInboxPanel" aria-label="Ship inbox" open={activeTab === 'captain' ? undefined : true}>
         <summary><span>Ship Inbox</span><strong>{awaitingResponses} action items</strong></summary>
@@ -10787,31 +10037,7 @@ export function ShipOSPage({
         </div>
       </details>}
 
-      <details className="shipOsPanel shipOsUtilityDrawer shipOsDisplayPanel" aria-label="Visibility and typography settings" open={activeTab === 'captain' ? undefined : true}>
-        <summary><span>Visibility & Typography</span><strong>{displayFontSize}px / {displayFontFace.label}</strong></summary>
-        <div className="shipOsUtilityDrawerBody">
-        <div className="shipOsDisplayControls">
-          <label className="shipOsFontSizeControl">
-            <span>Interface Text Size</span>
-            <div>
-              <button type="button" aria-label="Decrease interface text size" disabled={displayFontSize <= 10} onClick={() => setDisplayPreferences((current) => ({ ...current, fontSize: Math.max(10, displayFontSize - 1) }))}>-</button>
-              <input type="range" min="10" max="18" step="1" value={displayFontSize} onChange={(event) => setDisplayPreferences((current) => ({ ...current, fontSize: Number(event.target.value) }))} />
-              <output aria-live="polite">{displayFontSize}px</output>
-              <button type="button" aria-label="Increase interface text size" disabled={displayFontSize >= 18} onClick={() => setDisplayPreferences((current) => ({ ...current, fontSize: Math.min(18, displayFontSize + 1) }))}>+</button>
-            </div>
-          </label>
-          <fieldset className="shipOsFontFaceControl">
-            <legend>Typeface</legend>
-            <div>
-              {shipOsFontFaceOptions.map((option) => (
-                <button key={option.id} type="button" className={displayFontFace.id === option.id ? 'active' : ''} aria-pressed={displayFontFace.id === option.id} onClick={() => setDisplayPreferences((current) => ({ ...current, fontFace: option.id }))}>{option.label}</button>
-              ))}
-            </div>
-          </fieldset>
-          <button type="button" className="shipOsDisplayReset" onClick={() => setDisplayPreferences(defaultShipOsDisplayPreferences)}>Reset display</button>
-        </div>
-        </div>
-      </details>
+
 
       {personnelFileSelection && (openPersonnelCrewMember || openPersonnelPassenger) && (
         <div className="shipOsModalBackdrop" role="presentation" onMouseDown={closePersonnelFile}>
@@ -10949,7 +10175,7 @@ export function ShipOSPage({
                   <small>Use telemetry or inference</small>
                 </button>
               </div>
-              <small>{selectedCanAssignFaction ? 'Typing a new faction and saving creates a backstage Faction record for future contact assignments.' : 'Ownship faction is fixed to DSV Intrepid.'}</small>
+              <small>{selectedCanAssignFaction ? 'Typing a new faction and saving creates a backstage Faction record for future contact assignments.' : 'Ownship faction is fixed to Local player.'}</small>
             </section>
             <label><span>Name</span><input value={modalDraft.name} disabled={!selectedCanEditRecord} onChange={(event) => setModalDraft((current) => ({ ...current, name: event.target.value }))} /></label>
             <label><span>Classification</span><input value={modalDraft.className} disabled={!selectedCanEditRecord} onChange={(event) => setModalDraft((current) => ({ ...current, className: event.target.value }))} /></label>
@@ -10984,7 +10210,7 @@ export function ShipOSPage({
             <div className="shipOsModalActions">
               {selectedContact.id !== currentShipContactId && <button type="button" onClick={() => setNavigationDestination(selectedContact)}>Project flight path</button>}
               {selectedContact.id !== currentShipContactId && hailableContact(selectedContact) && <button type="button" onClick={() => prepareHailDraft(selectedContact)}>Prepare hail</button>}
-              {selectedContact.id !== currentShipContactId && <button type="button" onClick={updateCurrentFromContact}>Move Intrepid here</button>}
+              {selectedContact.id !== currentShipContactId && <button type="button" onClick={updateCurrentFromContact}>Use as manual map origin</button>}
               <button type="button" onClick={saveContactModal}>Save file</button>
               {selectedIsCustom && <button type="button" onClick={deleteSelectedContact}>Delete contact</button>}
             </div>

@@ -21,7 +21,7 @@ test('ShipOS keeps asteroid caution alarms without drawing asteroid or hostile s
   assert.match(source, /terrainCritical[\s\S]*Terrain clearance/)
   assert.match(source, /press to reset/)
   assert.match(source, /shipos-alarm-sound-uplink-enabled/)
-  assert.match(source, /Uplink \{alarmSoundUplinkEnabled \? 'Enabled' : 'Disabled'\}/)
+  assert.match(source, /Preference \{alarmSoundUplinkEnabled \? 'Enabled' : 'Disabled'\}/)
 
   assert.match(styles, /\.shipOsMasterAlarm-caution[\s\S]*#e8bd19/)
   assert.match(styles, /\.shipOsMasterAlarm-critical[\s\S]*#e21b1b/)

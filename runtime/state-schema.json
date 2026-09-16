@@ -1,0 +1,4377 @@
+{
+  "shipos-mission": {
+    "type": "object",
+    "fields": {
+      "title": {
+        "type": "string"
+      },
+      "goal": {
+        "type": "string"
+      },
+      "startedAt": {
+        "type": "string"
+      }
+    }
+  },
+  "shipos-alarm-sound-uplink-enabled": {
+    "type": "boolean"
+  },
+  "shipos-current-position": {
+    "type": "object",
+    "fields": {
+      "x": {
+        "type": "number",
+        "optional": false
+      },
+      "y": {
+        "type": "number",
+        "optional": false
+      },
+      "z": {
+        "type": "number",
+        "optional": false
+      }
+    }
+  },
+  "shipos-custom-contacts": {
+    "type": "array",
+    "item": {
+      "all": [
+        {
+          "type": "object",
+          "fields": {
+            "x": {
+              "type": "number",
+              "optional": false
+            },
+            "y": {
+              "type": "number",
+              "optional": false
+            },
+            "z": {
+              "type": "number",
+              "optional": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "fields": {
+            "id": {
+              "type": "string",
+              "optional": false
+            },
+            "name": {
+              "type": "string",
+              "optional": false
+            },
+            "className": {
+              "type": "string",
+              "optional": false
+            },
+            "kind": {
+              "any": [
+                {
+                  "literal": "body"
+                },
+                {
+                  "literal": "relay"
+                },
+                {
+                  "literal": "ship"
+                },
+                {
+                  "literal": "station"
+                },
+                {
+                  "literal": "gps"
+                },
+                {
+                  "literal": "asteroid"
+                },
+                {
+                  "literal": "radar"
+                },
+                {
+                  "literal": "signal"
+                },
+                {
+                  "literal": "waypoint"
+                },
+                {
+                  "literal": "custom"
+                }
+              ],
+              "optional": false
+            },
+            "status": {
+              "type": "string",
+              "optional": false
+            },
+            "color": {
+              "type": "string",
+              "optional": false
+            },
+            "notes": {
+              "type": "string",
+              "optional": false
+            },
+            "shortLabel": {
+              "type": "string",
+              "optional": true
+            },
+            "rangeMeters": {
+              "type": "number",
+              "optional": true
+            },
+            "radiusMeters": {
+              "type": "number",
+              "optional": true
+            },
+            "entityId": {
+              "type": "string",
+              "optional": true
+            },
+            "generatorName": {
+              "type": "string",
+              "optional": true
+            },
+            "storageName": {
+              "type": "string",
+              "optional": true
+            },
+            "hasAtmosphere": {
+              "type": "boolean",
+              "optional": true
+            },
+            "surfaceGravity": {
+              "type": "number",
+              "optional": true
+            },
+            "sourceName": {
+              "type": "string",
+              "optional": true
+            },
+            "relationship": {
+              "type": "string",
+              "optional": true
+            },
+            "contactSource": {
+              "type": "string",
+              "optional": true
+            },
+            "antennaName": {
+              "type": "string",
+              "optional": true
+            },
+            "faction": {
+              "type": "string",
+              "optional": true
+            },
+            "manualName": {
+              "type": "boolean",
+              "optional": true
+            },
+            "manualRecord": {
+              "type": "boolean",
+              "optional": true
+            },
+            "telemetryManaged": {
+              "type": "boolean",
+              "optional": true
+            },
+            "manualDisposition": {
+              "any": [
+                {
+                  "literal": "auto"
+                },
+                {
+                  "literal": "owned"
+                },
+                {
+                  "any": [
+                    {
+                      "literal": "owned"
+                    },
+                    {
+                      "literal": "friendly"
+                    },
+                    {
+                      "literal": "neutral"
+                    },
+                    {
+                      "literal": "hostile"
+                    },
+                    {
+                      "literal": "unknown"
+                    }
+                  ]
+                }
+              ],
+              "optional": true
+            },
+            "velocityX": {
+              "type": "number",
+              "optional": true
+            },
+            "velocityY": {
+              "type": "number",
+              "optional": true
+            },
+            "velocityZ": {
+              "type": "number",
+              "optional": true
+            },
+            "speed": {
+              "type": "number",
+              "optional": true
+            }
+          }
+        }
+      ]
+    }
+  },
+  "shipos-crew-roster": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "role": {
+          "type": "string",
+          "optional": false
+        },
+        "shift": {
+          "type": "string",
+          "optional": false
+        },
+        "status": {
+          "type": "string",
+          "optional": false
+        },
+        "clearance": {
+          "type": "string",
+          "optional": false
+        },
+        "serviceNumber": {
+          "type": "string",
+          "optional": true
+        },
+        "department": {
+          "type": "string",
+          "optional": true
+        },
+        "billet": {
+          "type": "string",
+          "optional": true
+        },
+        "rateMonthly": {
+          "type": "number",
+          "optional": true
+        },
+        "contractStatus": {
+          "type": "string",
+          "optional": true
+        },
+        "registryStanding": {
+          "type": "string",
+          "optional": true
+        },
+        "quarters": {
+          "type": "string",
+          "optional": true
+        },
+        "medicalStatus": {
+          "type": "string",
+          "optional": true
+        },
+        "credentials": {
+          "type": "array",
+          "item": {
+            "type": "string"
+          },
+          "optional": true
+        },
+        "notes": {
+          "type": "string",
+          "optional": true
+        },
+        "hiredAt": {
+          "type": "number",
+          "optional": true
+        },
+        "portraitId": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    }
+  },
+  "shipos-cargo-items": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "category": {
+          "type": "string",
+          "optional": false
+        },
+        "quantity": {
+          "type": "number",
+          "optional": false
+        },
+        "mass": {
+          "type": "number",
+          "optional": false
+        },
+        "bay": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-job-records": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "title": {
+          "type": "string",
+          "optional": false
+        },
+        "client": {
+          "type": "string",
+          "optional": false
+        },
+        "route": {
+          "type": "string",
+          "optional": false
+        },
+        "destination": {
+          "type": "string",
+          "optional": false
+        },
+        "status": {
+          "any": [
+            {
+              "literal": "Prospect"
+            },
+            {
+              "literal": "Booked"
+            },
+            {
+              "literal": "Boarding"
+            },
+            {
+              "literal": "In Transit"
+            },
+            {
+              "literal": "Complete"
+            },
+            {
+              "literal": "On Hold"
+            }
+          ],
+          "optional": false
+        },
+        "payout": {
+          "type": "number",
+          "optional": false
+        },
+        "departure": {
+          "type": "string",
+          "optional": false
+        },
+        "due": {
+          "type": "string",
+          "optional": false
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "number",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-passenger-files": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "jobId": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "manifestId": {
+          "type": "string",
+          "optional": false
+        },
+        "origin": {
+          "type": "string",
+          "optional": false
+        },
+        "destination": {
+          "type": "string",
+          "optional": false
+        },
+        "cabin": {
+          "type": "string",
+          "optional": false
+        },
+        "fare": {
+          "type": "number",
+          "optional": false
+        },
+        "status": {
+          "any": [
+            {
+              "literal": "Prospect"
+            },
+            {
+              "literal": "Booked"
+            },
+            {
+              "literal": "Boarded"
+            },
+            {
+              "literal": "In Transit"
+            },
+            {
+              "literal": "Delivered"
+            },
+            {
+              "literal": "Flagged"
+            },
+            {
+              "literal": "Declined"
+            }
+          ],
+          "optional": false
+        },
+        "clearance": {
+          "type": "string",
+          "optional": false
+        },
+        "risk": {
+          "type": "string",
+          "optional": false
+        },
+        "baggageKg": {
+          "type": "number",
+          "optional": false
+        },
+        "contact": {
+          "type": "string",
+          "optional": false
+        },
+        "medical": {
+          "type": "string",
+          "optional": false
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "number",
+          "optional": false
+        },
+        "portraitId": {
+          "type": "string",
+          "optional": true
+        }
+      }
+    }
+  },
+  "shipos-bank-entries": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "date": {
+          "type": "string",
+          "optional": false
+        },
+        "kind": {
+          "any": [
+            {
+              "literal": "income"
+            },
+            {
+              "literal": "expense"
+            }
+          ],
+          "optional": false
+        },
+        "vendor": {
+          "type": "string",
+          "optional": false
+        },
+        "category": {
+          "type": "string",
+          "optional": false
+        },
+        "amount": {
+          "type": "number",
+          "optional": false
+        },
+        "recurring": {
+          "type": "boolean",
+          "optional": false
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-waves": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "direction": {
+          "any": [
+            {
+              "literal": "incoming"
+            },
+            {
+              "literal": "outgoing"
+            }
+          ],
+          "optional": false
+        },
+        "network": {
+          "type": "string",
+          "optional": false
+        },
+        "from": {
+          "type": "string",
+          "optional": false
+        },
+        "to": {
+          "type": "string",
+          "optional": false
+        },
+        "subject": {
+          "type": "string",
+          "optional": false
+        },
+        "body": {
+          "type": "string",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "number",
+          "optional": false
+        },
+        "status": {
+          "any": [
+            {
+              "literal": "received"
+            },
+            {
+              "literal": "sent"
+            },
+            {
+              "literal": "awaiting-response"
+            },
+            {
+              "literal": "responded"
+            }
+          ],
+          "optional": false
+        },
+        "responseDueAt": {
+          "type": "number",
+          "optional": true
+        },
+        "crewTarget": {
+          "type": "string",
+          "optional": true
+        },
+        "priority": {
+          "any": [
+            {
+              "literal": "routine"
+            },
+            {
+              "literal": "priority"
+            },
+            {
+              "literal": "urgent"
+            }
+          ],
+          "optional": true
+        },
+        "channel": {
+          "any": [
+            {
+              "literal": "wave"
+            },
+            {
+              "literal": "hail"
+            },
+            {
+              "literal": "ship-to-ship"
+            },
+            {
+              "literal": "ship-to-shore"
+            },
+            {
+              "literal": "docking"
+            }
+          ],
+          "optional": true
+        },
+        "contactId": {
+          "type": "string",
+          "optional": true
+        },
+        "contactName": {
+          "type": "string",
+          "optional": true
+        },
+        "clearanceStatus": {
+          "any": [
+            {
+              "literal": "Requested"
+            },
+            {
+              "literal": "Granted"
+            },
+            {
+              "literal": "Denied"
+            },
+            {
+              "literal": "Negotiating"
+            }
+          ],
+          "optional": true
+        },
+        "feesCredits": {
+          "type": "number",
+          "optional": true
+        }
+      }
+    }
+  },
+  "shipos-auto-wave-enabled": {
+    "type": "boolean"
+  },
+  "shipos-logs": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "stamp": {
+          "type": "number",
+          "optional": false
+        },
+        "system": {
+          "type": "string",
+          "optional": false
+        },
+        "entry": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-contact-notes": {
+    "type": "map",
+    "item": {
+      "type": "string"
+    }
+  },
+  "shipos-contact-images": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "contactId": {
+          "type": "string",
+          "optional": false
+        },
+        "contactName": {
+          "type": "string",
+          "optional": false
+        },
+        "fileName": {
+          "type": "string",
+          "optional": false
+        },
+        "caption": {
+          "type": "string",
+          "optional": false
+        },
+        "dataUrl": {
+          "type": "string",
+          "optional": false
+        },
+        "width": {
+          "type": "number",
+          "optional": false
+        },
+        "height": {
+          "type": "number",
+          "optional": false
+        },
+        "byteSize": {
+          "type": "number",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "number",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-generated-portraits": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "skinTone": {
+          "type": "string",
+          "optional": false
+        },
+        "hairColor": {
+          "type": "string",
+          "optional": false
+        },
+        "eyeColor": {
+          "type": "string",
+          "optional": false
+        },
+        "uniformColor": {
+          "type": "string",
+          "optional": false
+        },
+        "accentColor": {
+          "type": "string",
+          "optional": false
+        },
+        "hairStyle": {
+          "any": [
+            {
+              "literal": "cropped"
+            },
+            {
+              "literal": "swept"
+            },
+            {
+              "literal": "long"
+            },
+            {
+              "literal": "buzz"
+            }
+          ],
+          "optional": false
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "number",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-metagame-records": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "kind": {
+          "any": [
+            {
+              "literal": "Character"
+            },
+            {
+              "literal": "Faction"
+            },
+            {
+              "literal": "Location"
+            },
+            {
+              "literal": "Mystery"
+            },
+            {
+              "literal": "Rumor"
+            },
+            {
+              "literal": "Contract"
+            },
+            {
+              "literal": "System Note"
+            }
+          ],
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "visibility": {
+          "any": [
+            {
+              "literal": "Canon"
+            },
+            {
+              "literal": "GM-only"
+            },
+            {
+              "literal": "Rumor"
+            },
+            {
+              "literal": "Not Yet Established"
+            }
+          ],
+          "optional": false
+        },
+        "status": {
+          "type": "string",
+          "optional": false
+        },
+        "tags": {
+          "type": "array",
+          "item": {
+            "type": "string"
+          },
+          "optional": false
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        },
+        "createdAt": {
+          "type": "number",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-location-records": {
+    "type": "array",
+    "item": {
+      "all": [
+        {
+          "type": "object",
+          "fields": {
+            "x": {
+              "type": "number",
+              "optional": false
+            },
+            "y": {
+              "type": "number",
+              "optional": false
+            },
+            "z": {
+              "type": "number",
+              "optional": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "fields": {
+            "id": {
+              "type": "string",
+              "optional": false
+            },
+            "contactId": {
+              "type": "string",
+              "optional": true
+            },
+            "name": {
+              "type": "string",
+              "optional": false
+            },
+            "body": {
+              "type": "string",
+              "optional": false
+            },
+            "className": {
+              "type": "string",
+              "optional": false
+            },
+            "knowledgeState": {
+              "any": [
+                {
+                  "literal": "DETECTED"
+                },
+                {
+                  "literal": "OBSERVED"
+                },
+                {
+                  "literal": "SURVEYED"
+                },
+                {
+                  "literal": "VERIFIED"
+                },
+                {
+                  "literal": "DISPUTED"
+                },
+                {
+                  "literal": "OBSOLETE"
+                },
+                {
+                  "literal": "DESTROYED"
+                }
+              ],
+              "optional": false
+            },
+            "confidence": {
+              "any": [
+                {
+                  "literal": "CONFIRMED"
+                },
+                {
+                  "literal": "PROBABLE"
+                },
+                {
+                  "literal": "RUMOR"
+                },
+                {
+                  "literal": "DISPUTED"
+                }
+              ],
+              "optional": false
+            },
+            "altitude": {
+              "type": "string",
+              "optional": false
+            },
+            "gravity": {
+              "type": "string",
+              "optional": false
+            },
+            "atmosphere": {
+              "type": "string",
+              "optional": false
+            },
+            "landingSuitability": {
+              "type": "string",
+              "optional": false
+            },
+            "approachNotes": {
+              "type": "string",
+              "optional": false
+            },
+            "hazards": {
+              "type": "string",
+              "optional": false
+            },
+            "previousVisits": {
+              "type": "array",
+              "item": {
+                "type": "string"
+              },
+              "optional": false
+            },
+            "knownRoutes": {
+              "type": "array",
+              "item": {
+                "type": "string"
+              },
+              "optional": false
+            },
+            "pilotAnnotations": {
+              "type": "string",
+              "optional": false
+            },
+            "whyHere": {
+              "type": "string",
+              "optional": false
+            },
+            "relatedJobIds": {
+              "type": "array",
+              "item": {
+                "type": "string"
+              },
+              "optional": false
+            },
+            "relatedEntityIds": {
+              "type": "array",
+              "item": {
+                "type": "string"
+              },
+              "optional": false
+            },
+            "updatedAt": {
+              "type": "number",
+              "optional": false
+            }
+          }
+        }
+      ]
+    }
+  },
+  "shipos-directory-entities": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "kind": {
+          "any": [
+            {
+              "literal": "Person"
+            },
+            {
+              "literal": "Organization"
+            },
+            {
+              "literal": "Ship"
+            },
+            {
+              "literal": "Faction"
+            }
+          ],
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "role": {
+          "type": "string",
+          "optional": false
+        },
+        "relationship": {
+          "type": "string",
+          "optional": false
+        },
+        "standing": {
+          "any": [
+            {
+              "literal": "CONFIRMED"
+            },
+            {
+              "literal": "PROBABLE"
+            },
+            {
+              "literal": "RUMOR"
+            },
+            {
+              "literal": "DISPUTED"
+            }
+          ],
+          "optional": false
+        },
+        "privacy": {
+          "any": [
+            {
+              "literal": "Public"
+            },
+            {
+              "literal": "Shipboard"
+            },
+            {
+              "literal": "Sensitive"
+            }
+          ],
+          "optional": false
+        },
+        "locationIds": {
+          "type": "array",
+          "item": {
+            "type": "string"
+          },
+          "optional": false
+        },
+        "jobIds": {
+          "type": "array",
+          "item": {
+            "type": "string"
+          },
+          "optional": false
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-ship-configurations": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "version": {
+          "type": "string",
+          "optional": false
+        },
+        "date": {
+          "type": "string",
+          "optional": false
+        },
+        "change": {
+          "type": "string",
+          "optional": false
+        },
+        "reason": {
+          "type": "string",
+          "optional": false
+        },
+        "shipyard": {
+          "type": "string",
+          "optional": false
+        },
+        "engineer": {
+          "type": "string",
+          "optional": false
+        },
+        "cost": {
+          "type": "number",
+          "optional": false
+        },
+        "previousVersion": {
+          "type": "string",
+          "optional": true
+        },
+        "relatedJobId": {
+          "type": "string",
+          "optional": true
+        },
+        "relatedIncidentId": {
+          "type": "string",
+          "optional": true
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-squawk-list": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "system": {
+          "type": "string",
+          "optional": false
+        },
+        "title": {
+          "type": "string",
+          "optional": false
+        },
+        "state": {
+          "any": [
+            {
+              "literal": "OPEN"
+            },
+            {
+              "literal": "WATCH"
+            },
+            {
+              "literal": "DEFERRED"
+            },
+            {
+              "literal": "GROUNDING"
+            },
+            {
+              "literal": "CLOSED"
+            }
+          ],
+          "optional": false
+        },
+        "condition": {
+          "type": "string",
+          "optional": false
+        },
+        "openedAt": {
+          "type": "string",
+          "optional": false
+        },
+        "inspectionDue": {
+          "type": "string",
+          "optional": false
+        },
+        "responsible": {
+          "type": "string",
+          "optional": false
+        },
+        "relatedConfigId": {
+          "type": "string",
+          "optional": true
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-commitments": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "person": {
+          "type": "string",
+          "optional": false
+        },
+        "promise": {
+          "type": "string",
+          "optional": false
+        },
+        "date": {
+          "type": "string",
+          "optional": false
+        },
+        "location": {
+          "type": "string",
+          "optional": false
+        },
+        "timeframe": {
+          "type": "string",
+          "optional": false
+        },
+        "status": {
+          "any": [
+            {
+              "literal": "Open"
+            },
+            {
+              "literal": "Watching"
+            },
+            {
+              "literal": "Fulfilled"
+            },
+            {
+              "literal": "Deferred"
+            }
+          ],
+          "optional": false
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-chronicle": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "title": {
+          "type": "string",
+          "optional": false
+        },
+        "stamp": {
+          "type": "number",
+          "optional": false
+        },
+        "source": {
+          "type": "string",
+          "optional": false
+        },
+        "status": {
+          "any": [
+            {
+              "literal": "Recorded"
+            },
+            {
+              "literal": "Pending"
+            },
+            {
+              "literal": "Forecast"
+            }
+          ],
+          "optional": false
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-medical-facilities": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "locationId": {
+          "type": "string",
+          "optional": false
+        },
+        "access": {
+          "type": "string",
+          "optional": false
+        },
+        "capabilities": {
+          "type": "array",
+          "item": {
+            "type": "string"
+          },
+          "optional": false
+        },
+        "travelNote": {
+          "type": "string",
+          "optional": false
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-security-incidents": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "title": {
+          "type": "string",
+          "optional": false
+        },
+        "locationId": {
+          "type": "string",
+          "optional": false
+        },
+        "confidence": {
+          "any": [
+            {
+              "literal": "CONFIRMED"
+            },
+            {
+              "literal": "PROBABLE"
+            },
+            {
+              "literal": "RUMOR"
+            },
+            {
+              "literal": "DISPUTED"
+            }
+          ],
+          "optional": false
+        },
+        "permission": {
+          "any": [
+            {
+              "literal": "Public"
+            },
+            {
+              "literal": "Shipboard"
+            },
+            {
+              "literal": "Sensitive"
+            }
+          ],
+          "optional": false
+        },
+        "involved": {
+          "type": "array",
+          "item": {
+            "type": "string"
+          },
+          "optional": false
+        },
+        "outcome": {
+          "type": "string",
+          "optional": false
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-stores-records": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "item": {
+          "type": "string",
+          "optional": false
+        },
+        "quantity": {
+          "type": "number",
+          "optional": false
+        },
+        "unit": {
+          "type": "string",
+          "optional": false
+        },
+        "storage": {
+          "type": "string",
+          "optional": false
+        },
+        "desiredMinimum": {
+          "type": "number",
+          "optional": false
+        },
+        "purchaseLocation": {
+          "type": "string",
+          "optional": false
+        },
+        "lastPrice": {
+          "type": "number",
+          "optional": false
+        },
+        "expiration": {
+          "type": "string",
+          "optional": true
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-last-telemetry-packet": {
+    "any": [
+      {
+        "all": [
+          {
+            "type": "object",
+            "fields": {
+              "worldId": {
+                "type": "string",
+                "optional": true
+              },
+              "controlMode": {
+                "type": "string",
+                "optional": true
+              },
+              "protocol": {
+                "type": "string",
+                "optional": true
+              },
+              "source": {
+                "type": "string",
+                "optional": true
+              },
+              "modVersion": {
+                "type": "string",
+                "optional": true
+              },
+              "version": {
+                "type": "number",
+                "optional": true
+              },
+              "packetId": {
+                "type": "string",
+                "optional": true
+              },
+              "sequence": {
+                "type": "number",
+                "optional": true
+              },
+              "ship": {
+                "type": "string",
+                "optional": true
+              },
+              "stamp": {
+                "type": "string",
+                "optional": true
+              },
+              "x": {
+                "type": "number",
+                "optional": true
+              },
+              "y": {
+                "type": "number",
+                "optional": true
+              },
+              "z": {
+                "type": "number",
+                "optional": true
+              },
+              "velocityX": {
+                "type": "number",
+                "optional": true
+              },
+              "velocityY": {
+                "type": "number",
+                "optional": true
+              },
+              "velocityZ": {
+                "type": "number",
+                "optional": true
+              },
+              "angularVelocityX": {
+                "type": "number",
+                "optional": true
+              },
+              "angularVelocityY": {
+                "type": "number",
+                "optional": true
+              },
+              "angularVelocityZ": {
+                "type": "number",
+                "optional": true
+              },
+              "speed": {
+                "type": "number",
+                "optional": true
+              },
+              "mass": {
+                "type": "number",
+                "optional": true
+              },
+              "naturalGravity": {
+                "type": "number",
+                "optional": true
+              },
+              "surfaceAltitude": {
+                "type": "number",
+                "optional": true
+              },
+              "seaLevelAltitude": {
+                "type": "number",
+                "optional": true
+              },
+              "verticalSpeed": {
+                "type": "number",
+                "optional": true
+              },
+              "horizontalSpeed": {
+                "type": "number",
+                "optional": true
+              },
+              "gravityX": {
+                "type": "number",
+                "optional": true
+              },
+              "gravityY": {
+                "type": "number",
+                "optional": true
+              },
+              "gravityZ": {
+                "type": "number",
+                "optional": true
+              },
+              "forwardX": {
+                "type": "number",
+                "optional": true
+              },
+              "forwardY": {
+                "type": "number",
+                "optional": true
+              },
+              "forwardZ": {
+                "type": "number",
+                "optional": true
+              },
+              "upX": {
+                "type": "number",
+                "optional": true
+              },
+              "upY": {
+                "type": "number",
+                "optional": true
+              },
+              "upZ": {
+                "type": "number",
+                "optional": true
+              },
+              "planetCenterX": {
+                "type": "number",
+                "optional": true
+              },
+              "planetCenterY": {
+                "type": "number",
+                "optional": true
+              },
+              "planetCenterZ": {
+                "type": "number",
+                "optional": true
+              },
+              "terrainScanRange": {
+                "type": "number",
+                "optional": true
+              },
+              "terrainScanWidth": {
+                "type": "number",
+                "optional": true
+              },
+              "terrainScanRows": {
+                "type": "number",
+                "optional": true
+              },
+              "terrainScanColumns": {
+                "type": "number",
+                "optional": true
+              },
+              "terrainScanSource": {
+                "type": "string",
+                "optional": true
+              },
+              "terrainScanStatus": {
+                "type": "string",
+                "optional": true
+              },
+              "terrainScan": {
+                "type": "array",
+                "item": {
+                  "type": "object",
+                  "fields": {
+                    "row": {
+                      "type": "number",
+                      "optional": false
+                    },
+                    "column": {
+                      "type": "number",
+                      "optional": false
+                    },
+                    "ahead": {
+                      "type": "number",
+                      "optional": false
+                    },
+                    "lateral": {
+                      "type": "number",
+                      "optional": false
+                    },
+                    "clearance": {
+                      "type": "number",
+                      "optional": false
+                    },
+                    "surfaceDelta": {
+                      "type": "number",
+                      "optional": false
+                    }
+                  }
+                },
+                "optional": true
+              },
+              "dampeners": {
+                "type": "boolean",
+                "optional": true
+              },
+              "underControl": {
+                "type": "boolean",
+                "optional": true
+              },
+              "batteryPercent": {
+                "type": "number",
+                "optional": true
+              },
+              "hydrogenPercent": {
+                "type": "number",
+                "optional": true
+              },
+              "oxygenPercent": {
+                "type": "number",
+                "optional": true
+              },
+              "jumpPercent": {
+                "type": "number",
+                "optional": true
+              },
+              "reactorPercent": {
+                "type": "number",
+                "optional": true
+              },
+              "thrustPercent": {
+                "type": "number",
+                "optional": true
+              },
+              "cargoPercent": {
+                "type": "number",
+                "optional": true
+              },
+              "cargoCurrentVolume": {
+                "type": "number",
+                "optional": true
+              },
+              "cargoMaxVolume": {
+                "type": "number",
+                "optional": true
+              },
+              "terminalBlockCount": {
+                "type": "number",
+                "optional": true
+              },
+              "functionalBlockCount": {
+                "type": "number",
+                "optional": true
+              },
+              "nonFunctionalBlockCount": {
+                "type": "number",
+                "optional": true
+              },
+              "notWorkingBlockCount": {
+                "type": "number",
+                "optional": true
+              },
+              "batteryCount": {
+                "type": "number",
+                "optional": true
+              },
+              "gasTankCount": {
+                "type": "number",
+                "optional": true
+              },
+              "hydrogenTankCount": {
+                "type": "number",
+                "optional": true
+              },
+              "oxygenTankCount": {
+                "type": "number",
+                "optional": true
+              },
+              "jumpDriveCount": {
+                "type": "number",
+                "optional": true
+              },
+              "reactorCount": {
+                "type": "number",
+                "optional": true
+              },
+              "inventoryCount": {
+                "type": "number",
+                "optional": true
+              },
+              "thrusterCount": {
+                "type": "number",
+                "optional": true
+              },
+              "gyroCount": {
+                "type": "number",
+                "optional": true
+              },
+              "connectorCount": {
+                "type": "number",
+                "optional": true
+              },
+              "connectedConnectorCount": {
+                "type": "number",
+                "optional": true
+              },
+              "landingGearCount": {
+                "type": "number",
+                "optional": true
+              },
+              "lockedLandingGearCount": {
+                "type": "number",
+                "optional": true
+              },
+              "airVentCount": {
+                "type": "number",
+                "optional": true
+              },
+              "pressurizedVentCount": {
+                "type": "number",
+                "optional": true
+              },
+              "antennaCount": {
+                "type": "number",
+                "optional": true
+              },
+              "weaponCount": {
+                "type": "number",
+                "optional": true
+              },
+              "toolCount": {
+                "type": "number",
+                "optional": true
+              },
+              "instructionCount": {
+                "type": "number",
+                "optional": true
+              },
+              "controller": {
+                "type": "string",
+                "optional": true
+              },
+              "grid": {
+                "type": "string",
+                "optional": true
+              },
+              "notes": {
+                "type": "string",
+                "optional": true
+              }
+            }
+          },
+          {
+            "type": "object",
+            "fields": {
+              "contacts": {
+                "type": "array",
+                "item": {
+                  "type": "object",
+                  "fields": {
+                    "id": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "name": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "className": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "kind": {
+                      "any": [
+                        {
+                          "any": [
+                            {
+                              "literal": "body"
+                            },
+                            {
+                              "literal": "relay"
+                            },
+                            {
+                              "literal": "ship"
+                            },
+                            {
+                              "literal": "station"
+                            },
+                            {
+                              "literal": "gps"
+                            },
+                            {
+                              "literal": "asteroid"
+                            },
+                            {
+                              "literal": "radar"
+                            },
+                            {
+                              "literal": "signal"
+                            },
+                            {
+                              "literal": "waypoint"
+                            },
+                            {
+                              "literal": "custom"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "status": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "color": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "notes": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "relationship": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "contactSource": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "antennaName": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "faction": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "factionName": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "owner": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "distanceMeters": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "velocityX": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "velocityY": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "velocityZ": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "vx": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "vy": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "vz": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "speed": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "radiusMeters": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "entityId": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "generatorName": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "storageName": {
+                      "type": "string",
+                      "optional": true
+                    },
+                    "hasAtmosphere": {
+                      "any": [
+                        {
+                          "type": "boolean"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "surfaceGravity": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "x": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "y": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    },
+                    "z": {
+                      "any": [
+                        {
+                          "type": "number"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "optional": true
+                    }
+                  }
+                },
+                "optional": true
+              },
+              "fleetTag": {
+                "type": "string",
+                "optional": true
+              },
+              "fleetEligibleCount": {
+                "type": "number",
+                "optional": true
+              },
+              "fleet": {
+                "type": "array",
+                "item": {
+                  "all": [
+                    {
+                      "type": "object",
+                      "fields": {
+                        "worldId": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "controlMode": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "protocol": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "source": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "modVersion": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "version": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "packetId": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "sequence": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "ship": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "stamp": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "x": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "y": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "z": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "velocityX": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "velocityY": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "velocityZ": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "angularVelocityX": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "angularVelocityY": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "angularVelocityZ": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "speed": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "mass": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "naturalGravity": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "surfaceAltitude": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "seaLevelAltitude": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "verticalSpeed": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "horizontalSpeed": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "gravityX": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "gravityY": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "gravityZ": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "forwardX": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "forwardY": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "forwardZ": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "upX": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "upY": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "upZ": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "planetCenterX": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "planetCenterY": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "planetCenterZ": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "terrainScanRange": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "terrainScanWidth": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "terrainScanRows": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "terrainScanColumns": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "terrainScanSource": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "terrainScanStatus": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "terrainScan": {
+                          "type": "array",
+                          "item": {
+                            "type": "object",
+                            "fields": {
+                              "row": {
+                                "type": "number",
+                                "optional": false
+                              },
+                              "column": {
+                                "type": "number",
+                                "optional": false
+                              },
+                              "ahead": {
+                                "type": "number",
+                                "optional": false
+                              },
+                              "lateral": {
+                                "type": "number",
+                                "optional": false
+                              },
+                              "clearance": {
+                                "type": "number",
+                                "optional": false
+                              },
+                              "surfaceDelta": {
+                                "type": "number",
+                                "optional": false
+                              }
+                            }
+                          },
+                          "optional": true
+                        },
+                        "dampeners": {
+                          "type": "boolean",
+                          "optional": true
+                        },
+                        "underControl": {
+                          "type": "boolean",
+                          "optional": true
+                        },
+                        "batteryPercent": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "hydrogenPercent": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "oxygenPercent": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "jumpPercent": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "reactorPercent": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "thrustPercent": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "cargoPercent": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "cargoCurrentVolume": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "cargoMaxVolume": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "terminalBlockCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "functionalBlockCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "nonFunctionalBlockCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "notWorkingBlockCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "batteryCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "gasTankCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "hydrogenTankCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "oxygenTankCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "jumpDriveCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "reactorCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "inventoryCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "thrusterCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "gyroCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "connectorCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "connectedConnectorCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "landingGearCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "lockedLandingGearCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "airVentCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "pressurizedVentCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "antennaCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "weaponCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "toolCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "instructionCount": {
+                          "type": "number",
+                          "optional": true
+                        },
+                        "controller": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "grid": {
+                          "type": "string",
+                          "optional": true
+                        },
+                        "notes": {
+                          "type": "string",
+                          "optional": true
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "fields": {
+                        "id": {
+                          "type": "string",
+                          "optional": false
+                        },
+                        "name": {
+                          "type": "string",
+                          "optional": false
+                        },
+                        "tag": {
+                          "literal": "[ShipOS]",
+                          "optional": false
+                        },
+                        "relationship": {
+                          "any": [
+                            {
+                              "literal": "owned"
+                            },
+                            {
+                              "literal": "friendly"
+                            }
+                          ],
+                          "optional": false
+                        },
+                        "kind": {
+                          "any": [
+                            {
+                              "literal": "ship"
+                            },
+                            {
+                              "literal": "station"
+                            }
+                          ],
+                          "optional": false
+                        },
+                        "x": {
+                          "type": "number",
+                          "optional": false
+                        },
+                        "y": {
+                          "type": "number",
+                          "optional": false
+                        },
+                        "z": {
+                          "type": "number",
+                          "optional": false
+                        }
+                      }
+                    }
+                  ]
+                },
+                "optional": true
+              }
+            }
+          }
+        ]
+      },
+      {
+        "literal": null
+      }
+    ]
+  },
+  "shipos-contact-memory": {
+    "type": "array",
+    "item": {
+      "all": [
+        {
+          "type": "object",
+          "fields": {
+            "x": {
+              "type": "number",
+              "optional": false
+            },
+            "y": {
+              "type": "number",
+              "optional": false
+            },
+            "z": {
+              "type": "number",
+              "optional": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "fields": {
+            "key": {
+              "type": "string",
+              "optional": false
+            },
+            "id": {
+              "type": "string",
+              "optional": false
+            },
+            "name": {
+              "type": "string",
+              "optional": false
+            },
+            "kind": {
+              "any": [
+                {
+                  "literal": "body"
+                },
+                {
+                  "literal": "relay"
+                },
+                {
+                  "literal": "ship"
+                },
+                {
+                  "literal": "station"
+                },
+                {
+                  "literal": "gps"
+                },
+                {
+                  "literal": "asteroid"
+                },
+                {
+                  "literal": "radar"
+                },
+                {
+                  "literal": "signal"
+                },
+                {
+                  "literal": "waypoint"
+                },
+                {
+                  "literal": "custom"
+                }
+              ],
+              "optional": false
+            },
+            "color": {
+              "type": "string",
+              "optional": false
+            },
+            "classFilter": {
+              "any": [
+                {
+                  "literal": "bodies"
+                },
+                {
+                  "literal": "stations"
+                },
+                {
+                  "literal": "ships"
+                },
+                {
+                  "literal": "asteroids"
+                },
+                {
+                  "literal": "radar"
+                },
+                {
+                  "literal": "signals"
+                },
+                {
+                  "literal": "gpsWaypoints"
+                },
+                {
+                  "literal": "relays"
+                }
+              ],
+              "optional": false
+            },
+            "iff": {
+              "any": [
+                {
+                  "literal": "owned"
+                },
+                {
+                  "literal": "friendly"
+                },
+                {
+                  "literal": "neutral"
+                },
+                {
+                  "literal": "hostile"
+                },
+                {
+                  "literal": "unknown"
+                }
+              ],
+              "optional": false
+            },
+            "factionFilter": {
+              "type": "string",
+              "optional": false
+            },
+            "firstSeen": {
+              "type": "number",
+              "optional": false
+            },
+            "lastSeen": {
+              "type": "number",
+              "optional": false
+            }
+          }
+        }
+      ]
+    }
+  },
+  "shipos-contact-memory-visible": {
+    "type": "boolean"
+  },
+  "shipos-telemetry-history": {
+    "type": "array",
+    "item": {
+      "all": [
+        {
+          "all": [
+            {
+              "type": "object",
+              "fields": {
+                "worldId": {
+                  "type": "string",
+                  "optional": true
+                },
+                "controlMode": {
+                  "type": "string",
+                  "optional": true
+                },
+                "protocol": {
+                  "type": "string",
+                  "optional": true
+                },
+                "source": {
+                  "type": "string",
+                  "optional": true
+                },
+                "modVersion": {
+                  "type": "string",
+                  "optional": true
+                },
+                "version": {
+                  "type": "number",
+                  "optional": true
+                },
+                "packetId": {
+                  "type": "string",
+                  "optional": true
+                },
+                "sequence": {
+                  "type": "number",
+                  "optional": true
+                },
+                "ship": {
+                  "type": "string",
+                  "optional": true
+                },
+                "stamp": {
+                  "type": "string",
+                  "optional": true
+                },
+                "x": {
+                  "type": "number",
+                  "optional": true
+                },
+                "y": {
+                  "type": "number",
+                  "optional": true
+                },
+                "z": {
+                  "type": "number",
+                  "optional": true
+                },
+                "velocityX": {
+                  "type": "number",
+                  "optional": true
+                },
+                "velocityY": {
+                  "type": "number",
+                  "optional": true
+                },
+                "velocityZ": {
+                  "type": "number",
+                  "optional": true
+                },
+                "angularVelocityX": {
+                  "type": "number",
+                  "optional": true
+                },
+                "angularVelocityY": {
+                  "type": "number",
+                  "optional": true
+                },
+                "angularVelocityZ": {
+                  "type": "number",
+                  "optional": true
+                },
+                "speed": {
+                  "type": "number",
+                  "optional": true
+                },
+                "mass": {
+                  "type": "number",
+                  "optional": true
+                },
+                "naturalGravity": {
+                  "type": "number",
+                  "optional": true
+                },
+                "surfaceAltitude": {
+                  "type": "number",
+                  "optional": true
+                },
+                "seaLevelAltitude": {
+                  "type": "number",
+                  "optional": true
+                },
+                "verticalSpeed": {
+                  "type": "number",
+                  "optional": true
+                },
+                "horizontalSpeed": {
+                  "type": "number",
+                  "optional": true
+                },
+                "gravityX": {
+                  "type": "number",
+                  "optional": true
+                },
+                "gravityY": {
+                  "type": "number",
+                  "optional": true
+                },
+                "gravityZ": {
+                  "type": "number",
+                  "optional": true
+                },
+                "forwardX": {
+                  "type": "number",
+                  "optional": true
+                },
+                "forwardY": {
+                  "type": "number",
+                  "optional": true
+                },
+                "forwardZ": {
+                  "type": "number",
+                  "optional": true
+                },
+                "upX": {
+                  "type": "number",
+                  "optional": true
+                },
+                "upY": {
+                  "type": "number",
+                  "optional": true
+                },
+                "upZ": {
+                  "type": "number",
+                  "optional": true
+                },
+                "planetCenterX": {
+                  "type": "number",
+                  "optional": true
+                },
+                "planetCenterY": {
+                  "type": "number",
+                  "optional": true
+                },
+                "planetCenterZ": {
+                  "type": "number",
+                  "optional": true
+                },
+                "terrainScanRange": {
+                  "type": "number",
+                  "optional": true
+                },
+                "terrainScanWidth": {
+                  "type": "number",
+                  "optional": true
+                },
+                "terrainScanRows": {
+                  "type": "number",
+                  "optional": true
+                },
+                "terrainScanColumns": {
+                  "type": "number",
+                  "optional": true
+                },
+                "terrainScanSource": {
+                  "type": "string",
+                  "optional": true
+                },
+                "terrainScanStatus": {
+                  "type": "string",
+                  "optional": true
+                },
+                "terrainScan": {
+                  "type": "array",
+                  "item": {
+                    "type": "object",
+                    "fields": {
+                      "row": {
+                        "type": "number",
+                        "optional": false
+                      },
+                      "column": {
+                        "type": "number",
+                        "optional": false
+                      },
+                      "ahead": {
+                        "type": "number",
+                        "optional": false
+                      },
+                      "lateral": {
+                        "type": "number",
+                        "optional": false
+                      },
+                      "clearance": {
+                        "type": "number",
+                        "optional": false
+                      },
+                      "surfaceDelta": {
+                        "type": "number",
+                        "optional": false
+                      }
+                    }
+                  },
+                  "optional": true
+                },
+                "dampeners": {
+                  "type": "boolean",
+                  "optional": true
+                },
+                "underControl": {
+                  "type": "boolean",
+                  "optional": true
+                },
+                "batteryPercent": {
+                  "type": "number",
+                  "optional": true
+                },
+                "hydrogenPercent": {
+                  "type": "number",
+                  "optional": true
+                },
+                "oxygenPercent": {
+                  "type": "number",
+                  "optional": true
+                },
+                "jumpPercent": {
+                  "type": "number",
+                  "optional": true
+                },
+                "reactorPercent": {
+                  "type": "number",
+                  "optional": true
+                },
+                "thrustPercent": {
+                  "type": "number",
+                  "optional": true
+                },
+                "cargoPercent": {
+                  "type": "number",
+                  "optional": true
+                },
+                "cargoCurrentVolume": {
+                  "type": "number",
+                  "optional": true
+                },
+                "cargoMaxVolume": {
+                  "type": "number",
+                  "optional": true
+                },
+                "terminalBlockCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "functionalBlockCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "nonFunctionalBlockCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "notWorkingBlockCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "batteryCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "gasTankCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "hydrogenTankCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "oxygenTankCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "jumpDriveCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "reactorCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "inventoryCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "thrusterCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "gyroCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "connectorCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "connectedConnectorCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "landingGearCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "lockedLandingGearCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "airVentCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "pressurizedVentCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "antennaCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "weaponCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "toolCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "instructionCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "controller": {
+                  "type": "string",
+                  "optional": true
+                },
+                "grid": {
+                  "type": "string",
+                  "optional": true
+                },
+                "notes": {
+                  "type": "string",
+                  "optional": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "fields": {
+                "contacts": {
+                  "type": "array",
+                  "item": {
+                    "type": "object",
+                    "fields": {
+                      "id": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "name": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "className": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "kind": {
+                        "any": [
+                          {
+                            "any": [
+                              {
+                                "literal": "body"
+                              },
+                              {
+                                "literal": "relay"
+                              },
+                              {
+                                "literal": "ship"
+                              },
+                              {
+                                "literal": "station"
+                              },
+                              {
+                                "literal": "gps"
+                              },
+                              {
+                                "literal": "asteroid"
+                              },
+                              {
+                                "literal": "radar"
+                              },
+                              {
+                                "literal": "signal"
+                              },
+                              {
+                                "literal": "waypoint"
+                              },
+                              {
+                                "literal": "custom"
+                              }
+                            ]
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "status": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "color": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "notes": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "relationship": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "contactSource": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "antennaName": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "faction": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "factionName": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "owner": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "distanceMeters": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "velocityX": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "velocityY": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "velocityZ": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "vx": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "vy": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "vz": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "speed": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "radiusMeters": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "entityId": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "generatorName": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "storageName": {
+                        "type": "string",
+                        "optional": true
+                      },
+                      "hasAtmosphere": {
+                        "any": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "surfaceGravity": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "x": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "y": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      },
+                      "z": {
+                        "any": [
+                          {
+                            "type": "number"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ],
+                        "optional": true
+                      }
+                    }
+                  },
+                  "optional": true
+                },
+                "fleetTag": {
+                  "type": "string",
+                  "optional": true
+                },
+                "fleetEligibleCount": {
+                  "type": "number",
+                  "optional": true
+                },
+                "fleet": {
+                  "type": "array",
+                  "item": {
+                    "all": [
+                      {
+                        "type": "object",
+                        "fields": {
+                          "worldId": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "controlMode": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "protocol": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "source": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "modVersion": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "version": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "packetId": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "sequence": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "ship": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "stamp": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "x": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "y": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "z": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "velocityX": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "velocityY": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "velocityZ": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "angularVelocityX": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "angularVelocityY": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "angularVelocityZ": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "speed": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "mass": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "naturalGravity": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "surfaceAltitude": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "seaLevelAltitude": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "verticalSpeed": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "horizontalSpeed": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "gravityX": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "gravityY": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "gravityZ": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "forwardX": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "forwardY": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "forwardZ": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "upX": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "upY": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "upZ": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "planetCenterX": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "planetCenterY": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "planetCenterZ": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "terrainScanRange": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "terrainScanWidth": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "terrainScanRows": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "terrainScanColumns": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "terrainScanSource": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "terrainScanStatus": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "terrainScan": {
+                            "type": "array",
+                            "item": {
+                              "type": "object",
+                              "fields": {
+                                "row": {
+                                  "type": "number",
+                                  "optional": false
+                                },
+                                "column": {
+                                  "type": "number",
+                                  "optional": false
+                                },
+                                "ahead": {
+                                  "type": "number",
+                                  "optional": false
+                                },
+                                "lateral": {
+                                  "type": "number",
+                                  "optional": false
+                                },
+                                "clearance": {
+                                  "type": "number",
+                                  "optional": false
+                                },
+                                "surfaceDelta": {
+                                  "type": "number",
+                                  "optional": false
+                                }
+                              }
+                            },
+                            "optional": true
+                          },
+                          "dampeners": {
+                            "type": "boolean",
+                            "optional": true
+                          },
+                          "underControl": {
+                            "type": "boolean",
+                            "optional": true
+                          },
+                          "batteryPercent": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "hydrogenPercent": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "oxygenPercent": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "jumpPercent": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "reactorPercent": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "thrustPercent": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "cargoPercent": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "cargoCurrentVolume": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "cargoMaxVolume": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "terminalBlockCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "functionalBlockCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "nonFunctionalBlockCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "notWorkingBlockCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "batteryCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "gasTankCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "hydrogenTankCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "oxygenTankCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "jumpDriveCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "reactorCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "inventoryCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "thrusterCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "gyroCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "connectorCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "connectedConnectorCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "landingGearCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "lockedLandingGearCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "airVentCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "pressurizedVentCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "antennaCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "weaponCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "toolCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "instructionCount": {
+                            "type": "number",
+                            "optional": true
+                          },
+                          "controller": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "grid": {
+                            "type": "string",
+                            "optional": true
+                          },
+                          "notes": {
+                            "type": "string",
+                            "optional": true
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "fields": {
+                          "id": {
+                            "type": "string",
+                            "optional": false
+                          },
+                          "name": {
+                            "type": "string",
+                            "optional": false
+                          },
+                          "tag": {
+                            "literal": "[ShipOS]",
+                            "optional": false
+                          },
+                          "relationship": {
+                            "any": [
+                              {
+                                "literal": "owned"
+                              },
+                              {
+                                "literal": "friendly"
+                              }
+                            ],
+                            "optional": false
+                          },
+                          "kind": {
+                            "any": [
+                              {
+                                "literal": "ship"
+                              },
+                              {
+                                "literal": "station"
+                              }
+                            ],
+                            "optional": false
+                          },
+                          "x": {
+                            "type": "number",
+                            "optional": false
+                          },
+                          "y": {
+                            "type": "number",
+                            "optional": false
+                          },
+                          "z": {
+                            "type": "number",
+                            "optional": false
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  "optional": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "fields": {
+            "id": {
+              "type": "string",
+              "optional": false
+            },
+            "receivedAt": {
+              "type": "number",
+              "optional": false
+            },
+            "importedBy": {
+              "any": [
+                {
+                  "literal": "manual"
+                },
+                {
+                  "literal": "bridge"
+                }
+              ],
+              "optional": false
+            }
+          }
+        }
+      ]
+    }
+  },
+  "shipos-navigation-plan": {
+    "type": "object",
+    "fields": {
+      "destinationId": {
+        "type": "string",
+        "optional": false
+      },
+      "cruiseSpeed": {
+        "type": "string",
+        "optional": false
+      },
+      "fuelReserve": {
+        "type": "string",
+        "optional": false
+      },
+      "notes": {
+        "type": "string",
+        "optional": false
+      }
+    }
+  },
+  "shipos-planetary-chart-overrides": {
+    "type": "map",
+    "item": {
+      "all": [
+        {
+          "type": "object",
+          "fields": {
+            "x": {
+              "type": "number",
+              "optional": false
+            },
+            "y": {
+              "type": "number",
+              "optional": false
+            },
+            "z": {
+              "type": "number",
+              "optional": false
+            }
+          }
+        },
+        {
+          "type": "object",
+          "fields": {
+            "source": {
+              "type": "string",
+              "optional": false
+            },
+            "updatedAt": {
+              "type": "number",
+              "optional": false
+            },
+            "originalName": {
+              "type": "string",
+              "optional": true
+            },
+            "radiusMeters": {
+              "type": "number",
+              "optional": true
+            },
+            "entityId": {
+              "type": "string",
+              "optional": true
+            },
+            "generatorName": {
+              "type": "string",
+              "optional": true
+            },
+            "storageName": {
+              "type": "string",
+              "optional": true
+            }
+          }
+        }
+      ]
+    }
+  },
+  "shipos-bridge-config": {
+    "type": "object",
+    "fields": {
+      "endpoint": {
+        "type": "string",
+        "optional": false
+      },
+      "status": {
+        "type": "string",
+        "optional": false
+      },
+      "lastAttemptAt": {
+        "type": "number",
+        "optional": true
+      },
+      "lastSuccessAt": {
+        "type": "number",
+        "optional": true
+      },
+      "lastHealthAt": {
+        "type": "number",
+        "optional": true
+      },
+      "autoPoll": {
+        "type": "boolean",
+        "optional": true
+      },
+      "pollSeconds": {
+        "type": "number",
+        "optional": true
+      },
+      "consecutiveFailures": {
+        "type": "number",
+        "optional": true
+      },
+      "packetCount": {
+        "type": "number",
+        "optional": true
+      },
+      "latestStamp": {
+        "type": "string",
+        "optional": true
+      },
+      "bridgeUptimeSeconds": {
+        "type": "number",
+        "optional": true
+      }
+    }
+  },
+  "shipos-blueprint-snapshots": {
+    "type": "array",
+    "item": {
+      "type": "object",
+      "fields": {
+        "id": {
+          "type": "string",
+          "optional": false
+        },
+        "fileName": {
+          "type": "string",
+          "optional": false
+        },
+        "name": {
+          "type": "string",
+          "optional": false
+        },
+        "importedAt": {
+          "type": "number",
+          "optional": false
+        },
+        "rawSize": {
+          "type": "number",
+          "optional": false
+        },
+        "gridCount": {
+          "type": "number",
+          "optional": false
+        },
+        "blockCount": {
+          "type": "number",
+          "optional": false
+        },
+        "largestGrid": {
+          "type": "string",
+          "optional": false
+        },
+        "cockpitCount": {
+          "type": "number",
+          "optional": false
+        },
+        "thrusterCount": {
+          "type": "number",
+          "optional": false
+        },
+        "gyroCount": {
+          "type": "number",
+          "optional": false
+        },
+        "cargoCount": {
+          "type": "number",
+          "optional": false
+        },
+        "batteryCount": {
+          "type": "number",
+          "optional": false
+        },
+        "reactorCount": {
+          "type": "number",
+          "optional": false
+        },
+        "jumpDriveCount": {
+          "type": "number",
+          "optional": false
+        },
+        "connectorCount": {
+          "type": "number",
+          "optional": false
+        },
+        "renderedBlockCount": {
+          "type": "number",
+          "optional": true
+        },
+        "bounds": {
+          "type": "object",
+          "fields": {
+            "minX": {
+              "type": "number",
+              "optional": false
+            },
+            "maxX": {
+              "type": "number",
+              "optional": false
+            },
+            "minY": {
+              "type": "number",
+              "optional": false
+            },
+            "maxY": {
+              "type": "number",
+              "optional": false
+            },
+            "minZ": {
+              "type": "number",
+              "optional": false
+            },
+            "maxZ": {
+              "type": "number",
+              "optional": false
+            }
+          },
+          "optional": true
+        },
+        "modelBlocks": {
+          "type": "array",
+          "item": {
+            "type": "object",
+            "fields": {
+              "x": {
+                "type": "number",
+                "optional": false
+              },
+              "y": {
+                "type": "number",
+                "optional": false
+              },
+              "z": {
+                "type": "number",
+                "optional": false
+              },
+              "category": {
+                "any": [
+                  {
+                    "literal": "armor"
+                  },
+                  {
+                    "literal": "propulsion"
+                  },
+                  {
+                    "literal": "power"
+                  },
+                  {
+                    "literal": "cargo"
+                  },
+                  {
+                    "literal": "control"
+                  },
+                  {
+                    "literal": "weapon"
+                  },
+                  {
+                    "literal": "life"
+                  },
+                  {
+                    "literal": "utility"
+                  },
+                  {
+                    "literal": "interior"
+                  }
+                ],
+                "optional": false
+              },
+              "shape": {
+                "any": [
+                  {
+                    "literal": "cube"
+                  },
+                  {
+                    "literal": "slope"
+                  },
+                  {
+                    "literal": "corner"
+                  },
+                  {
+                    "literal": "thin"
+                  },
+                  {
+                    "literal": "truss"
+                  }
+                ],
+                "optional": true
+              },
+              "subtype": {
+                "type": "string",
+                "optional": false
+              },
+              "forward": {
+                "type": "string",
+                "optional": true
+              },
+              "up": {
+                "type": "string",
+                "optional": true
+              },
+              "sizeX": {
+                "type": "number",
+                "optional": true
+              },
+              "sizeY": {
+                "type": "number",
+                "optional": true
+              },
+              "sizeZ": {
+                "type": "number",
+                "optional": true
+              }
+            }
+          },
+          "optional": true
+        },
+        "notes": {
+          "type": "string",
+          "optional": false
+        }
+      }
+    }
+  },
+  "shipos-blueprint-view-preset": {
+    "any": [
+      {
+        "literal": "shape"
+      },
+      {
+        "literal": "actual"
+      },
+      {
+        "literal": "category"
+      }
+    ]
+  },
+  "shipos-contact-filters": {
+    "type": "object",
+    "fields": {
+      "classes": {
+        "type": "map",
+        "item": {
+          "type": "boolean"
+        },
+        "optional": false
+      },
+      "iff": {
+        "type": "map",
+        "item": {
+          "type": "boolean"
+        },
+        "optional": false
+      },
+      "factions": {
+        "type": "map",
+        "item": {
+          "type": "boolean"
+        },
+        "optional": false
+      }
+    }
+  },
+  "shipos-contact-search": {
+    "type": "string"
+  },
+  "shipos-contact-sort": {
+    "type": "object",
+    "fields": {
+      "key": {
+        "any": [
+          {
+            "literal": "distance"
+          },
+          {
+            "literal": "name"
+          },
+          {
+            "literal": "kind"
+          },
+          {
+            "literal": "iff"
+          },
+          {
+            "literal": "faction"
+          },
+          {
+            "literal": "source"
+          },
+          {
+            "literal": "className"
+          },
+          {
+            "literal": "status"
+          }
+        ],
+        "optional": false
+      },
+      "direction": {
+        "any": [
+          {
+            "literal": "asc"
+          },
+          {
+            "literal": "desc"
+          }
+        ],
+        "optional": false
+      }
+    }
+  },
+  "shipos-contact-designations": {
+    "type": "map",
+    "item": {
+      "any": [
+        {
+          "literal": "auto"
+        },
+        {
+          "literal": "owned"
+        },
+        {
+          "any": [
+            {
+              "literal": "owned"
+            },
+            {
+              "literal": "friendly"
+            },
+            {
+              "literal": "neutral"
+            },
+            {
+              "literal": "hostile"
+            },
+            {
+              "literal": "unknown"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "shipos-contact-factions": {
+    "type": "map",
+    "item": {
+      "type": "string"
+    }
+  },
+  "shipos-body-scale-mode": {
+    "any": [
+      {
+        "literal": "true-scale"
+      },
+      {
+        "literal": "tactical"
+      }
+    ]
+  },
+  "shipos-display-preferences": {
+    "type": "object",
+    "fields": {
+      "fontSize": {
+        "type": "number",
+        "optional": false
+      },
+      "fontFace": {
+        "any": [
+          {
+            "literal": "tech"
+          },
+          {
+            "literal": "sans"
+          },
+          {
+            "literal": "serif"
+          }
+        ],
+        "optional": false
+      }
+    }
+  },
+  "shipos-ai-model": {
+    "type": "string"
+  },
+  "shipos-echomail-folder": {
+    "any": [
+      {
+        "literal": "inbox"
+      },
+      {
+        "literal": "sent"
+      },
+      {
+        "literal": "pending"
+      },
+      {
+        "literal": "hails"
+      },
+      {
+        "literal": "all"
+      }
+    ]
+  },
+  "shipos-echomail-search": {
+    "type": "string"
+  }
+}

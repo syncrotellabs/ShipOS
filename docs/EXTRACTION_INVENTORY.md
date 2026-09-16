@@ -26,5 +26,4 @@
 
 ## Next extraction seam
 
-Move the planetary map into its own feature module with explicit telemetry and persistence interfaces. The full console can then compose that module for Pro, while Lite can ship the map without importing crew, mail, banking, jobs, AI, or campaign-management code.
-
+Current direction: retain the complete free toolkit behind Telemetry and Storytelling pages. There are no Lite/Pro tiers or paid feature gates. Further extraction of the large legacy view into tested feature modules remains maintainability work.

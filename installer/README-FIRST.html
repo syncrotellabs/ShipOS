@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ShipOS 0.2.0-beta.4 — Read first</title>
+  <style>
+    :root { color-scheme: dark; font: 17px/1.55 system-ui, sans-serif; background: #0e1c23; color: #ddefe9; }
+    body { max-width: 850px; margin: 0 auto; padding: 36px 22px 70px; }
+    h1, h2 { color: #8fe4c5; } h1 { margin-bottom: 0; } h2 { margin-top: 2rem; }
+    .tag { color: #99b6be; font-family: ui-monospace, monospace; }
+    .notice { border: 1px solid #eccc63; background: #302919; padding: 14px 18px; border-radius: 8px; }
+    code { background: #162a31; padding: .12em .35em; border-radius: 4px; }
+    a { color: #8fcaf0; } li { margin: .35rem 0; }
+  </style>
+</head>
+<body>
+  <h1>ShipOS</h1>
+  <div class="tag">0.2.0-beta.4 · Windows 10/11 x64 · free MIT donationware</div>
+  <p>ShipOS is a local Space Engineers telemetry and Storytelling companion. Setup is offline and installs for the current Windows user without normally requiring administrator access.</p>
+  <div class="notice"><strong>Public beta:</strong> this executable is not yet code-signed. Download it only from the official syncrotellabs website, compare its SHA-256 checksum, and do not run it if the source or checksum is uncertain.</div>
+  <h2>What is included</h2>
+  <ul>
+    <li>ShipOS web app, private Node.js 24 runtime, and embedded SQLite support</li>
+    <li>Tray helper and Start-menu launch/uninstall shortcuts</li>
+    <li>Optional <code>ShipOSLocalTelemetry</code> world mod</li>
+  </ul>
+  <p>Nothing is downloaded during setup. No system Node.js, database server, plugin loader, account, subscription, or cloud service is needed.</p>
+  <h2>Requirements</h2>
+  <ul>
+    <li>64-bit Windows 10 or 11, .NET Framework 4.x, and Windows PowerShell 5.1</li>
+    <li>250 MB free minimum, plus space for retained rollback copies</li>
+    <li>Space Engineers for live telemetry; Storytelling works without the game</li>
+    <li>A modern WebGL browser</li>
+  </ul>
+  <h2>After setup</h2>
+  <ol>
+    <li>Enable <code>ShipOSLocalTelemetry</code> in the save's Mods list.</li>
+    <li>Fully reload the world.</li>
+    <li>Start ShipOS from Start or the tray helmet.</li>
+    <li>For a tablet, Android device, or another PC, enable local sharing and open the one-time QR/link on the same trusted network.</li>
+  </ol>
+  <p>LAN sharing uses unencrypted HTTP. Never port-forward ShipOS or expose it to the internet.</p>
+  <h2>Help and privacy</h2>
+  <p>Setup includes a copyable readiness report. Additional documentation is included in the portable package and on the download page. ShipOS contains no analytics or syncrotellabs data collection. Optional AI requires a separately installed local compatible service.</p>
+  <p>Support: <a href="mailto:syncrotellabs@gmail.com">syncrotellabs@gmail.com</a></p>
+</body>
+</html>

@@ -1,3 +1,4 @@
+// Preserved integration source; not shipped or enabled in the local single-player beta.
 using Sandbox.Game.Entities;
 using Sandbox.ModAPI;
 using System;

@@ -1,0 +1,53 @@
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+import test from 'node:test'
+const read = relative => readFile(new URL(relative, import.meta.url), 'utf8')
+test('new missions start empty, without seeding the retired campaign', async () => {
+  const source = await read('../src/ShipOSPage.tsx')
+  for (const name of ['Crew','Cargo','Jobs','PassengerFiles','MetagameRecords','LocationRecords','DirectoryEntities','ShipConfigurations','Squawks','Commitments','Chronicle','MedicalFacilities','SecurityIncidents','StoresRecords']) assert.match(source, new RegExp(`const initial${name}: [^\\n]+ = \\[\\]`))
+  assert.doesNotMatch(source, /campaignSeedVersion|job-ares-europa|crew-hales|5000000|10000000|\/api\/gaming/)
+  assert.match(source, /'shipos-auto-wave-enabled', false/)
+  assert.match(source, /destinationId: ''/)
+  assert.match(source, /function createInitialWaves\(\): Wave\[\] \{ return \[\] \}/)
+})
+test('main pages, first-visit beta notice, configuration drawer, and fragment pairing are wired', async () => {
+  const app = await read('../src/LocalApp.tsx')
+  const page = await read('../src/ShipOSPage.tsx')
+  assert.match(app, /aria-label="Main pages"/)
+  assert.match(app, /Storytelling and AI roleplay are especially experimental/)
+  assert.match(app, /dialog\.current\.showModal\(\)/)
+  assert.match(app, /window\.location\.hash\.slice\(1\)/)
+  assert.match(app, /\/api\/pair\/claim/)
+  assert.match(page, /className="betaConfiguration"/)
+  assert.match(page, /renderTab\('telemetry'\)/)
+  assert.match(app, /One engineer\. A planet\. Your next move\./)
+  assert.match(app, /story read\/write included\. No account or login/)
+  assert.match(app, /Copy pairing link/)
+})
+
+test('native installer is a guided offline setup and includes start and uninstall entries', async () => {
+  const setup = await read('../installer/Setup.cs')
+  for (const step of ['Welcome to ShipOS', 'Readiness check', 'Choose components', 'Ready to install', 'ShipOS is installed']) assert.match(setup, new RegExp(step))
+  assert.match(setup, /Node\.js 24: bundled/)
+  assert.match(setup, /ShipOSLocalTelemetry world mod/)
+  assert.match(setup, /Tray helper and Start menu launch\/uninstall shortcuts/)
+  assert.match(setup, /Uninstall ShipOS\.lnk/)
+  assert.match(setup, /Path\.GetFileName\(Assembly\.GetExecutingAssembly\(\)\.Location\), "Uninstall\.exe"/)
+  assert.match(setup, /read and write Storytelling/)
+  assert.match(setup, /makes no firewall rule/)
+  assert.match(setup, /deliberately keeps stories/)
+  assert.match(setup, /Environment\.Is64BitOperatingSystem/)
+  assert.match(setup, /Copy check details/)
+  assert.match(setup, /Setup never downloads prerequisites or changes Windows Firewall/)
+  assert.match(setup, /dotnet\.microsoft\.com\/download\/dotnet-framework/)
+  assert.match(setup, /about_windows_powershell_5\.1/)
+  assert.match(setup, /String\.IsNullOrEmpty\(entry\.Name\)/)
+})
+
+test('public beta package carries requirements, privacy, support, release notes, and a machine-readable manifest', async () => {
+  const build = await read('../scripts/build-installer.ps1')
+  for (const document of ['REQUIREMENTS.md', 'PRIVACY.md', 'SECURITY.md', 'SUPPORT.md', 'RELEASE_NOTES.md', 'README-FIRST.html']) assert.match(build, new RegExp(document.replace('.', '\\.')))
+  assert.match(build, /RELEASE-MANIFEST\.json/)
+  assert.match(build, /codeSigned = \$false/)
+  assert.match(build, /channel = 'public-beta'/)
+})

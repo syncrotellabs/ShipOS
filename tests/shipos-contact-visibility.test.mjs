@@ -18,7 +18,7 @@ test('ShipOS pins GPS, friendly, and owned contacts above filters and search', a
 test('ShipOS enlarges map labels while preserving zoom scaling', async () => {
   const source = await readFile(new URL('../src/ShipOSPage.tsx', import.meta.url), 'utf8')
 
-  assert.match(source, /const mapLabelSizeMultiplier = 1\.3/)
+  assert.match(source, /const mapLabelSizeMultiplier = 2\.0/)
   assert.match(source, /const scaledWidth = width \* mapLabelSizeMultiplier/)
   assert.match(source, /const scaledHeight = height \* mapLabelSizeMultiplier/)
   assert.match(source, /baseLabelScale = \{ x: scaledWidth, y: scaledHeight \}/)
