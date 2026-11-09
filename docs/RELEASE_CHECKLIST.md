@@ -8,6 +8,7 @@
 - [x] Bundled-runtime offline installer, shortcut/tray lifecycle, opt-in startup, uninstaller and checksums.
 - [x] Current-PC isolated install/upgrade/uninstall test and core regression suite.
 - [x] Versioned release notes, requirements, privacy, support, website copy and machine-readable release manifest.
+- [x] One-click Express setup, automatic backed-up latest-save configuration, running-game deferral and idempotence test.
 - [ ] Live character/cockpit/world-transition verification after reloading the updated mod.
 - [ ] Actual iPad Safari QR, touch, reconnect, and long-session tests.
 - [ ] Actual local AI model end-to-end test (manual story tools do not require it).

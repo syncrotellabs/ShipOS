@@ -3,7 +3,7 @@
 ## Verified here
 
 - Production TypeScript/Vite build succeeds. The legacy view remains a large JavaScript bundle (~1.1 MB uncompressed); feature splitting is follow-up work.
-- Twenty-six automated tests cover authentication/Host/Origin protections, single-use account-free Storytelling read/write pairing, PC-only administration, revocation, SQLite restart persistence, world isolation, revision conflicts, reset/restore snapshots, invalid packet/state rejection, optional local AI configuration, the guided installer/release-document contract, retained UI/data regressions, and tagged-fleet behavior.
+- Twenty-seven automated tests cover authentication/Host/Origin protections, single-use account-free Storytelling read/write pairing, PC-only administration, revocation, SQLite restart persistence, world isolation, revision conflicts, reset/restore snapshots, invalid packet/state rejection, optional local AI configuration, the express/advanced installer and release-document contract, automatic backed-up save configuration, retained UI/data regressions, and tagged-fleet behavior.
 - Browser checks: first-visit beta modal, live file telemetry, initially closed configuration drawer, both main pages, zero-state Star System prompt, mission creation, and that mission loading in a second console.
 - A clean profile remains at revision zero while telemetry updates. Sensor ticks no longer pollute the shared story log.
 - Updated local mod compiles against this PC's Space Engineers assemblies using the .NET Framework compiler. One existing obsolete-enum compatibility warning remains; no compilation errors.
@@ -14,6 +14,9 @@
 - The website bundle now carries requirements, privacy, security, support, release notes, website copy, SHA-256 checksums and a machine-readable release manifest.
 - Packaged beta.4 fresh install, upgrade, retained rollback, installed-document presence, compact uninstaller, and uninstall passed in an isolated current-PC directory. The preflight first caught and then regression-tested a Windows backslash ZIP-directory entry before the candidate was rebuilt.
 - This PC was upgraded from beta.3 to beta.4; the helper restarted, the local API reported beta.4, story revision zero remained intact, and the service error log stayed empty.
+- Beta.5 Express setup reduces the normal path to one **Install ShipOS** action. It installs the mod, shortcuts, startup entry and helper, opens the app, and enables telemetry in the latest complete local save while retaining both original XML files. Advanced setup remains available.
+- A synthetic Space Engineers world verified that automatic configuration updates `Sandbox_config.sbc` and `Sandbox.sbc`, creates one recoverable backup, validates the result, and remains idempotent on a second run. Backup subdirectories are excluded and path containment is enforced.
+- Packaged beta.5 express install, upgrade, rollback retention, configurator presence and uninstall passed in an isolated directory. This PC then upgraded to beta.5 through the express path; the runtime reported beta.5, the latest save was already correctly configured, story revision zero was preserved, and service/save-configuration error logs remained empty.
 
 ## Needs live player validation
 

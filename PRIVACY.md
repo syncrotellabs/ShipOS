@@ -1,12 +1,12 @@
 # Privacy
 
-ShipOS 0.2.0-beta.4 is local-first software. It has no syncrotellabs account, advertising SDK, analytics service, subscription check, cloud relay, or automatic update service.
+ShipOS 0.2.0-beta.5 is local-first software. It has no syncrotellabs account, advertising SDK, analytics service, subscription check, cloud relay, or automatic update service.
 
 ## Data stored locally
 
 The gaming PC stores Storytelling records, device grants, settings, and bounded telemetry history in `%LOCALAPPDATA%\ShipOS\Data\shipos.sqlite`. Backups and recovery snapshots are stored alongside that database; diagnostic logs are stored in `%LOCALAPPDATA%\ShipOS\Logs`.
 
-The Space Engineers world mod writes its latest telemetry packet under the current Windows user's Space Engineers data directory. ShipOS reads that local file. It does not modify the game save or send commands to the game.
+The Space Engineers world mod writes its latest telemetry packet under the current Windows user's Space Engineers data directory. ShipOS reads that local file and sends no commands to the game. Express setup can enable the mod in the latest local save while the game is closed; it backs up both changed save files under `%LOCALAPPDATA%\ShipOS\Data\save-backups` first. Advanced setup can disable this behavior.
 
 ## Local-network sharing
 

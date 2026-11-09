@@ -9,7 +9,8 @@ using System.Threading;
 using System.Windows.Forms;
 using Microsoft.Win32;
 
-// Per-user, offline installer. No elevation, downloaded code, firewall changes, or game-save editing.
+// Per-user, offline installer. No elevation, downloaded code, or firewall changes.
+// Express setup safely enables the local telemetry mod in the latest save with a retained backup.
 internal static class Setup
 {
     [DllImport("user32.dll", SetLastError = true)] private static extern bool DestroyIcon(IntPtr handle);
@@ -17,18 +18,19 @@ internal static class Setup
     private static readonly string NormalRoot = Path.Combine(Local, "Programs", "ShipOS");
     private static readonly string DataRoot = Path.Combine(Local, "ShipOS");
     private const string Marker = ".shipos-install-v1";
-    private const string Version = "0.2.0-beta.4";
+    private const string Version = "0.2.0-beta.5";
     private static string InstallRoot = NormalRoot;
     private static bool TestMode;
     private static bool Quiet;
+    private static bool Express;
     private static Form Window;
     private static Label Status;
-    private static CheckBox Mod, Startup, Desktop, Launch;
+    private static CheckBox Mod, AutoConfigure, Startup, Desktop, Launch;
     private static Panel Content;
     private static Button Back, Next, Cancel;
     private static int Step;
-    private static bool Installing, Complete, LaunchAfterInstall;
-    private static bool InstallModOption = true, DesktopOption = true, StartupOption = false, LaunchOption = true;
+    private static bool Installing, Complete;
+    private static bool InstallModOption = true, AutoConfigureOption = true, DesktopOption = true, StartupOption = true, LaunchOption = true;
 
     [STAThread]
     public static int Main(string[] args)
@@ -36,6 +38,7 @@ internal static class Setup
         try
         {
             Quiet = Array.IndexOf(args, "/quiet") >= 0;
+            Express = Array.IndexOf(args, "/express") >= 0;
             foreach (string arg in args)
             {
                 if (!arg.StartsWith("/test-root=", StringComparison.OrdinalIgnoreCase)) continue;
@@ -54,7 +57,7 @@ internal static class Setup
                 Process.Start(new ProcessStartInfo(worker, workerArgs) { UseShellExecute = false, CreateNoWindow = true });
                 return 0;
             }
-            if (Quiet) { Install(false, false, false, false); return 0; }
+            if (Quiet) { Install(Express, Express, Express, Express, Express); return 0; }
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
             BuildWizard(); Application.Run(Window); return 0;
         }
@@ -72,6 +75,7 @@ internal static class Setup
         {
             DesktopOption = File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "ShipOS.lnk"));
             using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")) StartupOption = key != null && key.GetValue("ShipOS") != null;
+            AutoConfigureOption = File.Exists(Path.Combine(DataRoot, @"Data\auto-configure-saves"));
         }
         Window = new Form { Text = "ShipOS Setup Wizard", ClientSize = new Size(720, 610), FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, StartPosition = FormStartPosition.CenterScreen, BackColor = Color.FromArgb(14, 28, 35), ForeColor = Color.FromArgb(221, 239, 233), Font = new Font("Segoe UI", 10) };
         var header = new Panel { Location = new Point(0, 0), Size = new Size(720, 82), BackColor = Color.FromArgb(10, 21, 27) };
@@ -158,7 +162,7 @@ internal static class Setup
     private static void RenderStep()
     {
         Content.Controls.Clear(); Back.Enabled = Step > 0 && Step < 4 && !Installing; Cancel.Enabled = !Installing && Step < 4;
-        Status.Text = "Step " + (Step + 1) + " of 5  ·  Installs for this Windows user only  ·  No administrator access required";
+        Status.Text = Step == 0 ? "Express setup  ·  One click  ·  No administrator access required" : "Advanced setup  ·  Step " + Step + " of 4";
         if (Step == 0) RenderWelcome();
         else if (Step == 1) RenderReadiness();
         else if (Step == 2) RenderComponents();
@@ -168,11 +172,12 @@ internal static class Setup
 
     private static void RenderWelcome()
     {
-        AddTitle("Welcome to ShipOS", "A local Space Engineers companion for live telemetry and player-authored storytelling.");
-        AddText("This wizard installs the standalone web app, its private Node 24 runtime, the tray helper, Start menu launch/uninstall shortcuts, and—if selected—the ShipOSLocalTelemetry world mod.", 112, 70, 10, Window.ForeColor);
-        AddText("No subscription, cloud relay, username, or password. The gaming PC opens automatically. Other PCs, iPads, and Android devices pair once from the same trusted network and can read and write Storytelling immediately.", 193, 76, 10, Color.FromArgb(183, 207, 210));
-        AddText("The pairing link is a local trust check, not a login. Administrative settings remain on the gaming PC. ShipOS does not control the game.", 282, 60, 10, Color.FromArgb(236, 205, 156));
-        Next.Text = "Next >"; Next.Enabled = true;
+        AddTitle("Install ShipOS", "The recommended setup is automatic, local, and reversible.");
+        AddText("Express setup installs the app, bundled Node runtime, tray helper, shortcuts, and telemetry mod; enables telemetry for the most recently played local save; starts ShipOS with Windows; and opens the app when finished.", 112, 82, 10, Window.ForeColor);
+        AddText("Before changing a save, ShipOS keeps the original configuration and checkpoint under its local save-backups folder. New saves are enabled after Space Engineers closes, ready for their next session.", 202, 76, 10, Color.FromArgb(183, 207, 210));
+        AddText("If the game is open, setup will not touch its active files. Exit and reopen the game once when convenient—the helper finishes configuration after the game closes. No account, subscription, cloud relay, or downloaded prerequisite is involved.", 287, 76, 9, Color.FromArgb(236, 205, 156));
+        AddSmallButton("Advanced options", 8, 371, 150, delegate { Step = 1; RenderStep(); });
+        Next.Text = "Install ShipOS"; Next.Enabled = true;
     }
 
     private static void RenderReadiness()
@@ -184,7 +189,7 @@ internal static class Setup
         long freeMb = new DriveInfo(Path.GetPathRoot(NormalRoot)).AvailableFreeSpace / 1024 / 1024;
         string report = "ShipOS " + Version + " readiness\r\nWindows: " + WindowsProductName() + " x" + (Environment.Is64BitOperatingSystem ? "64" : "86") + "\r\n.NET Framework: " + DotNetFrameworkVersion() + "\r\nWindows PowerShell 5.1 path: " + (powershell ? PowerShellPath() : "MISSING") + "\r\nBundled Node.js: included\r\nSpace Engineers data: " + (gameData ? "detected" : "not detected") + "\r\nFree space: " + freeMb.ToString("N0") + " MB";
         AddText((supportedWindows ? "✓" : "✕") + " Windows 10/11 x64: " + WindowsProductName() + "\n✓ Microsoft .NET Framework: " + DotNetFrameworkVersion() + "\n" + (powershell ? "✓" : "✕") + " Windows PowerShell 5.1 helper: " + (powershell ? "available" : "missing") + "\n✓ Node.js 24: bundled; no system install required\n" + (gameData ? "✓" : "!") + " Space Engineers data folder: " + (gameData ? "detected" : "not detected yet") + "\n" + (freeMb >= 250 ? "✓" : "✕") + " Free disk space: " + freeMb.ToString("N0") + " MB (250 MB minimum; more for rollback)", 112, 145, 10, Window.ForeColor);
-        AddText(gameData ? "The telemetry mod can be installed. Setup cannot silently enable a world mod; choose it in the save’s Mods list and reload the world." : "The core app can install, but telemetry needs Space Engineers. Setup can stage the mod later; Storytelling works without the game.", 263, 62, 9, Color.FromArgb(236, 205, 156));
+        AddText(gameData ? "The telemetry mod and latest local save can be configured automatically. Originals are backed up first; a running game is never modified." : "The core app can install now. When Space Engineers creates a local save, the helper can configure it automatically after the game closes.", 263, 62, 9, Color.FromArgb(236, 205, 156));
         AddText("Setup never downloads prerequisites or changes Windows Firewall. If a required check fails, use the official help buttons or copy the check details for support.", 327, 40, 8, Color.FromArgb(153, 182, 190));
         AddSmallButton("Copy check details", 8, 371, 148, delegate { try { Clipboard.SetText(report); Status.Text = "Readiness details copied."; } catch { Status.Text = "Could not copy readiness details."; } });
         AddSmallButton("Microsoft .NET help", 165, 371, 160, delegate { OpenHelp("https://dotnet.microsoft.com/download/dotnet-framework"); });
@@ -198,11 +203,12 @@ internal static class Setup
         AddTitle("Choose components", "Core application files and a Start menu entry are required.");
         AddChoice("ShipOS application + bundled private Node 24 runtime (required)", 108, true, false, delegate { });
         AddChoice("Tray helper and Start menu launch/uninstall shortcuts (required)", 143, true, false, delegate { });
-        Mod = AddChoice("Install/update the ShipOSLocalTelemetry world mod", 188, InstallModOption, true, value => InstallModOption = value);
-        Desktop = AddChoice("Create a desktop shortcut", 223, DesktopOption, true, value => DesktopOption = value);
-        Startup = AddChoice("Start the ShipOS helper when I sign in to Windows", 258, StartupOption, true, value => StartupOption = value);
-        Launch = AddChoice("Open ShipOS after setup", 293, LaunchOption, true, value => LaunchOption = value);
-        AddText("The helper owns only ShipOS’s bundled server process. Setup makes no firewall rule, opens no router port, and installs no plugin loader.", 344, 50, 9, Color.FromArgb(153, 182, 190));
+        Mod = AddChoice("Install/update the ShipOSLocalTelemetry world mod", 183, InstallModOption, true, value => { InstallModOption = value; if (AutoConfigure != null) { AutoConfigure.Enabled = value; if (!value) AutoConfigure.Checked = false; } });
+        AutoConfigure = AddChoice("Automatically enable telemetry for the latest local save (backed up first)", 218, AutoConfigureOption, InstallModOption, value => AutoConfigureOption = value);
+        Desktop = AddChoice("Create a desktop shortcut", 253, DesktopOption, true, value => DesktopOption = value);
+        Startup = AddChoice("Start the ShipOS helper when I sign in to Windows", 288, StartupOption, true, value => StartupOption = value);
+        Launch = AddChoice("Open ShipOS after setup", 323, LaunchOption, true, value => LaunchOption = value);
+        AddText("A running game is never edited. Setup makes no firewall rule, opens no router port, and installs no plugin loader.", 365, 38, 8, Color.FromArgb(153, 182, 190));
         Next.Text = "Next >"; Next.Enabled = true;
     }
 
@@ -210,7 +216,7 @@ internal static class Setup
     {
         AddTitle("Ready to install", "Review what will happen, then choose Install.");
         string modTarget = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SpaceEngineers", "Mods", "ShipOSLocalTelemetry");
-        AddText("Application\n  " + InstallRoot + "\n\nTelemetry world mod\n  " + (InstallModOption ? modTarget : "Not selected") + "\n\nShortcuts\n  Start menu: ShipOS + Uninstall ShipOS\n  Desktop: " + (DesktopOption ? "Yes" : "No") + "    Start at sign-in: " + (StartupOption ? "Yes" : "No"), 105, 175, 9, Window.ForeColor);
+        AddText("Application\n  " + InstallRoot + "\n\nTelemetry world mod\n  " + (InstallModOption ? modTarget : "Not selected") + "\n  Latest local save: " + (AutoConfigureOption ? "enable automatically with backup" : "leave unchanged") + "\n\nShortcuts\n  Start menu: ShipOS + Uninstall ShipOS\n  Desktop: " + (DesktopOption ? "Yes" : "No") + "    Start at sign-in: " + (StartupOption ? "Yes" : "No"), 105, 185, 9, Window.ForeColor);
         AddText("Updates preserve the separate story database and retain the prior app directory for rollback. Uninstall removes the app/helper/shortcuts but deliberately keeps stories, backups, logs, the game mod, and rollback copies.", 287, 68, 9, Color.FromArgb(236, 205, 156));
         var license = new TextBox { Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical, Location = new Point(3, 360), Size = new Size(645, 45), BackColor = Color.FromArgb(22, 42, 49), ForeColor = Window.ForeColor, Font = new Font("Consolas", 8) };
         using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("ShipOS.License")) using (var reader = new StreamReader(stream)) license.Text = reader.ReadToEnd();
@@ -220,7 +226,7 @@ internal static class Setup
     private static void RenderFinished()
     {
         AddTitle("ShipOS is installed", "The helper, runtime, shortcuts, and selected telemetry files are ready.");
-        AddText("1. In Space Engineers, enable ShipOSLocalTelemetry in this save’s Mods list.\n2. Save and fully reload the world after every mod update.\n3. Start ShipOS from Start or the tray helmet.\n4. For another PC, iPad, or Android device: enable local sharing, create a one-time pairing QR/link, and open it on the same trusted network.\n5. That paired play screen can read and write Storytelling immediately—no account or login.", 108, 154, 10, Window.ForeColor);
+        AddText("ShipOS is ready. Start Space Engineers normally and open the most recently played local save—the telemetry mod has been enabled automatically. If the game was running during setup, exit and reopen it once so the helper can finish safely. Future local saves are configured after the game closes.\n\nFor another PC, iPad, or Android device, use the tray pairing QR/link on the same trusted network. Paired play screens can read and write Storytelling immediately.", 108, 175, 10, Window.ForeColor);
         AddText("Uninstall: Start > ShipOS > Uninstall ShipOS, or Windows Installed apps. Story data and the game mod are retained so uninstall is recoverable. Local sharing is unencrypted HTTP; use only trusted private Wi-Fi/LAN and never port-forward it.", 279, 82, 9, Color.FromArgb(236, 205, 156));
         AddText("Storytelling and optional AI roleplay are beta fiction. Back up anything important from Configuration.", 370, 35, 9, Color.FromArgb(183, 207, 210));
         Next.Text = "Finish"; Next.Enabled = true; Back.Enabled = false; Cancel.Enabled = false;
@@ -229,11 +235,30 @@ internal static class Setup
 
     private static void AdvanceWizard()
     {
+        if (Step == 4) { Window.Close(); return; }
+        if (Step == 0)
+        {
+            string reason;
+            if (!PrerequisitesReady(out reason)) { Step = 1; RenderStep(); Status.Text = reason; return; }
+            BeginInstall(true, true, true, true, true); return;
+        }
         if (Step < 3) { Step++; RenderStep(); return; }
-        if (Step == 4) { if (LaunchAfterInstall) LaunchHelper(); Window.Close(); return; }
+        BeginInstall(InstallModOption, DesktopOption, StartupOption, AutoConfigureOption, LaunchOption);
+    }
+
+    private static bool PrerequisitesReady(out string reason)
+    {
+        if (!Environment.Is64BitOperatingSystem || WindowsMajorVersion() < 10) { reason = "ShipOS requires 64-bit Windows 10 or 11."; return false; }
+        if (!File.Exists(PowerShellPath())) { reason = "Windows PowerShell 5.1 is missing. Use the official help link below."; return false; }
+        long freeMb = new DriveInfo(Path.GetPathRoot(NormalRoot)).AvailableFreeSpace / 1024 / 1024;
+        if (freeMb < 250) { reason = "ShipOS needs at least 250 MB free, plus room for rollback and save backups."; return false; }
+        reason = "Ready"; return true;
+    }
+
+    private static void BeginInstall(bool installMod, bool desktop, bool startup, bool autoConfigure, bool launch)
+    {
         Installing = true; Back.Enabled = false; Next.Enabled = false; Cancel.Enabled = false; Window.UseWaitCursor = true;
-        LaunchAfterInstall = LaunchOption;
-        try { Install(InstallModOption, DesktopOption, StartupOption, false); Complete = true; Step = 4; }
+        try { Install(installMod, desktop, startup, autoConfigure, launch); Complete = true; Step = 4; }
         catch (Exception error) { MessageBox.Show(error.Message, "ShipOS setup could not finish"); Status.Text = "Setup stopped without replacing your previous installation."; }
         finally { Installing = false; Window.UseWaitCursor = false; if (!Complete) { Next.Enabled = true; Cancel.Enabled = true; Back.Enabled = true; } }
         if (Complete) RenderStep();
@@ -249,7 +274,7 @@ internal static class Setup
         if (!TestMode && !String.Equals(Path.GetFullPath(InstallRoot), Path.GetFullPath(NormalRoot), StringComparison.OrdinalIgnoreCase)) throw new Exception("Unexpected installation path.");
         if (Directory.Exists(InstallRoot) && !File.Exists(Path.Combine(InstallRoot, Marker))) throw new Exception("The target folder already exists but is not a recognized ShipOS installation. No files were changed.");
     }
-    private static void Install(bool installMod, bool desktop, bool startup, bool launch)
+    private static void Install(bool installMod, bool desktop, bool startup, bool autoConfigure, bool launch)
     {
         VerifyRoot(); StopHelper();
         string stage = Path.Combine(Path.GetTempPath(), "ShipOS-stage-" + Guid.NewGuid().ToString("N"));
@@ -299,7 +324,9 @@ internal static class Setup
                 if (startup) using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")) key.SetValue("ShipOS", HelperCommand());
                 else if (!Quiet) using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run", true)) if (key != null) key.DeleteValue("ShipOS", false);
                 if (installMod) InstallMod();
-                if (launch) LaunchHelper();
+                if (autoConfigure) ConfigureSaves(true);
+                else if (!Quiet) ConfigureSaves(false);
+                if (launch) { LaunchHelper(); Thread.Sleep(1200); OpenLocalApp(); }
             }
             Report("ShipOS installed. Your saved stories are preserved.");
             // Previous application versions are retained for rollback, never removed silently.
@@ -319,6 +346,11 @@ internal static class Setup
     private static string HelperArgs() { return "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + Path.Combine(InstallRoot, @"runtime\helper.ps1") + "\""; }
     private static string HelperCommand() { return "\"" + PowerShellPath() + "\" " + HelperArgs(); }
     private static void LaunchHelper() { Process.Start(new ProcessStartInfo(PowerShellPath(), HelperArgs()) { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden, WorkingDirectory = InstallRoot }); }
+    private static void OpenLocalApp()
+    {
+        try { Process.Start(new ProcessStartInfo("http://127.0.0.1:5174/") { UseShellExecute = true }); }
+        catch { }
+    }
     private static void HelperShortcut(string name)
     {
         dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell"));
@@ -363,6 +395,27 @@ internal static class Setup
         string target = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "SpaceEngineers", "Mods", "ShipOSLocalTelemetry");
         if (Directory.Exists(target)) CopyTree(target, Path.Combine(DataRoot, "Mod-backups", DateTime.Now.ToString("yyyyMMdd-HHmmss")));
         CopyTree(source, target);
+    }
+    private static void ConfigureSaves(bool enabled)
+    {
+        string data = Path.Combine(DataRoot, "Data");
+        string marker = Path.Combine(data, "auto-configure-saves");
+        Directory.CreateDirectory(data);
+        if (!enabled) { File.Delete(marker); return; }
+        File.WriteAllText(marker, "enabled by ShipOS setup " + Version);
+        if (Process.GetProcessesByName("SpaceEngineers").Length > 0) return;
+        string script = Path.Combine(InstallRoot, @"runtime\configure-saves.ps1");
+        try
+        {
+            var process = Process.Start(new ProcessStartInfo(PowerShellPath(), "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"" + script + "\"") { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden, WorkingDirectory = InstallRoot });
+            if (!process.WaitForExit(30000)) { try { process.Kill(); } catch { } throw new Exception("Save configuration timed out. The helper will retry after Space Engineers closes."); }
+            if (process.ExitCode != 0 && process.ExitCode != 2) throw new Exception("Save configuration returned " + process.ExitCode + ". The helper will retry after Space Engineers closes.");
+        }
+        catch (Exception error)
+        {
+            string logs = Path.Combine(DataRoot, "Logs"); Directory.CreateDirectory(logs);
+            File.AppendAllText(Path.Combine(logs, "save-config-error.log"), DateTime.Now.ToString("o") + " " + error.Message + Environment.NewLine);
+        }
     }
     private static void Uninstall()
     {

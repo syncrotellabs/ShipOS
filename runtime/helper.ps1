@@ -7,6 +7,7 @@ $dataRoot = Join-Path $env:LOCALAPPDATA 'ShipOS\Data'
 $logRoot = Join-Path $env:LOCALAPPDATA 'ShipOS\Logs'
 $localUrl = 'http://127.0.0.1:5174/'
 $helperPath = Join-Path $appRoot 'runtime\helper.ps1'
+$saveConfigurator = Join-Path $appRoot 'runtime\configure-saves.ps1'
 $powershellPath = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
 $eventName = 'Local\ShipOS.Stop.' + $env:USERNAME
 $mutexName = 'Local\ShipOS.Helper.' + $env:USERNAME
@@ -60,6 +61,7 @@ $script:ShouldRun = $true
 $script:Retries = 0
 $script:RetryAt = [DateTime]::MinValue
 $script:BrowserSession = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+$script:GameWasRunning = $false
 function Stop-OwnedServer {
     if ($script:ServerProcess -and -not $script:ServerProcess.HasExited) {
         # Only terminate the exact child process this helper started. SQLite WAL recovers cleanly.
@@ -75,6 +77,14 @@ function Start-LocalServer {
         if ((Test-Path -LiteralPath $log) -and (Get-Item -LiteralPath $log).Length -gt 1048576) { Move-Item -LiteralPath $log -Destination ($log + '.previous') -Force }
     }
     $script:ServerProcess = Start-Process -FilePath $NodePath -ArgumentList @('"' + (Join-Path $appRoot 'runtime\server.mjs') + '"') -WorkingDirectory $appRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logRoot 'service.log') -RedirectStandardError (Join-Path $logRoot 'service-error.log') -PassThru
+}
+function Test-SpaceEngineersRunning { return $null -ne (Get-Process -Name 'SpaceEngineers' -ErrorAction SilentlyContinue | Select-Object -First 1) }
+function Invoke-SaveConfigurator {
+    if (-not (Test-Path -LiteralPath (Join-Path $dataRoot 'auto-configure-saves')) -or -not (Test-Path -LiteralPath $saveConfigurator)) { return }
+    try {
+        $process = Start-Process -FilePath $powershellPath -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-WindowStyle','Hidden','-File',('"' + $saveConfigurator + '"')) -WorkingDirectory $appRoot -WindowStyle Hidden -Wait -PassThru
+        if ($process.ExitCode -ne 0 -and $process.ExitCode -ne 2) { Add-Content -LiteralPath (Join-Path $logRoot 'save-config-error.log') -Value ((Get-Date).ToString('o') + ' Save configurator exited ' + $process.ExitCode) }
+    } catch { Add-Content -LiteralPath (Join-Path $logRoot 'save-config-error.log') -Value ((Get-Date).ToString('o') + ' ' + $_.Exception.Message) }
 }
 function Open-ShipOs([string]$Query = '') { Start-Process ($localUrl + $Query) }
 function Add-Menu([string]$Text, [scriptblock]$Action) {
@@ -109,8 +119,13 @@ $tray.add_DoubleClick({ Open-ShipOs })
 $tray.Visible = $true
 $timer = New-Object Windows.Forms.Timer
 $timer.Interval = 2500
+$script:GameWasRunning = Test-SpaceEngineersRunning
+if (-not $script:GameWasRunning) { Invoke-SaveConfigurator }
 $timer.add_Tick({
     if ($stopEvent.WaitOne(0)) { [Windows.Forms.Application]::Exit(); return }
+    $gameRunning = Test-SpaceEngineersRunning
+    if ($script:GameWasRunning -and -not $gameRunning) { Invoke-SaveConfigurator }
+    $script:GameWasRunning = $gameRunning
     if (-not $script:ShouldRun) { return }
     if (-not $script:ServerProcess -or $script:ServerProcess.HasExited) {
         if ($script:Retries -ge 3) { $statusItem.Text = 'Service failed - open diagnostic logs'; $tray.Text = 'ShipOS needs attention'; return }

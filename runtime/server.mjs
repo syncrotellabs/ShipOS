@@ -124,7 +124,7 @@ export async function createShipOsServer(options = {}) {
     return worldState()
   }
   const status = () => ({
-    version: '0.2.0-beta.4', mode: 'Local single-player', worldId: activeWorld, worldName: worldState().name, uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+    version: '0.2.0-beta.5', mode: 'Local single-player', worldId: activeWorld, worldName: worldState().name, uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
     telemetry: { connected: Boolean(latest) && Date.now() - Date.parse(latest.stamp) < 15_000, stamp: latest?.stamp ?? null, accepted, rejected, error: lastError, watchFile, stableWorldIdentity: Boolean(latest?.worldId) },
     sharing: { enabled: Boolean(lanServer), address: lanAddress, url: lanAddress ? `http://${lanAddress}:${localPort}/` : null, addresses: addresses() },
     ai: getSetting('ai', { model: '', enabled: false }), database: 'SQLite', dataDir,

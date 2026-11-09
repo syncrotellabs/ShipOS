@@ -16,7 +16,7 @@ $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 New-Item -ItemType Directory -Path $stageRuntime -Force | Out-Null
 Copy-Item -LiteralPath (Join-Path $repoRoot 'dist') -Destination $stage -Recurse
 Compress-Archive -LiteralPath (Join-Path $repoRoot 'public\shipos\addons\shipos-local-telemetry-mod\ShipOSLocalTelemetry'),(Join-Path $repoRoot 'public\shipos\addons\shipos-local-telemetry-mod\README.md'),(Join-Path $repoRoot 'public\shipos\addons\shipos-local-telemetry-mod\install-shipos-local-telemetry-mod.cmd') -DestinationPath (Join-Path $stage 'dist\shipos\addons\shipos-local-telemetry-mod.zip') -CompressionLevel Optimal -Force
-foreach ($name in @('server.mjs','validate.mjs','state-schema.json','helper.ps1')) { Copy-Item -LiteralPath (Join-Path $repoRoot ('runtime\' + $name)) -Destination $stageRuntime }
+foreach ($name in @('server.mjs','validate.mjs','state-schema.json','helper.ps1','configure-saves.ps1')) { Copy-Item -LiteralPath (Join-Path $repoRoot ('runtime\' + $name)) -Destination $stageRuntime }
 Copy-Item -LiteralPath (Join-Path $repoRoot 'installer\Launch-ShipOS.cmd') -Destination (Join-Path $stage 'Launch-ShipOS.cmd')
 Copy-Item -LiteralPath $NodePath -Destination (Join-Path $stageRuntime 'node.exe')
 Copy-Item -LiteralPath (Join-Path $repoRoot 'LICENSE'),(Join-Path $repoRoot 'THIRD_PARTY_NOTICES.md'),(Join-Path $repoRoot 'README.md'),(Join-Path $repoRoot 'REQUIREMENTS.md'),(Join-Path $repoRoot 'PRIVACY.md'),(Join-Path $repoRoot 'SECURITY.md'),(Join-Path $repoRoot 'SUPPORT.md') -Destination $stage

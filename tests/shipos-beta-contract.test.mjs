@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import test from 'node:test'
 const read = relative => readFile(new URL(relative, import.meta.url), 'utf8')
 test('new missions start empty, without seeding the retired campaign', async () => {
@@ -27,7 +31,7 @@ test('main pages, first-visit beta notice, configuration drawer, and fragment pa
 
 test('native installer is a guided offline setup and includes start and uninstall entries', async () => {
   const setup = await read('../installer/Setup.cs')
-  for (const step of ['Welcome to ShipOS', 'Readiness check', 'Choose components', 'Ready to install', 'ShipOS is installed']) assert.match(setup, new RegExp(step))
+  for (const step of ['Install ShipOS', 'Readiness check', 'Choose components', 'Ready to install', 'ShipOS is installed']) assert.match(setup, new RegExp(step))
   assert.match(setup, /Node\.js 24: bundled/)
   assert.match(setup, /ShipOSLocalTelemetry world mod/)
   assert.match(setup, /Tray helper and Start menu launch\/uninstall shortcuts/)
@@ -42,6 +46,10 @@ test('native installer is a guided offline setup and includes start and uninstal
   assert.match(setup, /dotnet\.microsoft\.com\/download\/dotnet-framework/)
   assert.match(setup, /about_windows_powershell_5\.1/)
   assert.match(setup, /String\.IsNullOrEmpty\(entry\.Name\)/)
+  assert.match(setup, /Next\.Text = "Install ShipOS"/)
+  assert.match(setup, /BeginInstall\(true, true, true, true, true\)/)
+  assert.match(setup, /Install\(Express, Express, Express, Express, Express\)/)
+  assert.match(setup, /Automatically enable telemetry for the latest local save/)
 })
 
 test('public beta package carries requirements, privacy, support, release notes, and a machine-readable manifest', async () => {
@@ -50,4 +58,39 @@ test('public beta package carries requirements, privacy, support, release notes,
   assert.match(build, /RELEASE-MANIFEST\.json/)
   assert.match(build, /codeSigned = \$false/)
   assert.match(build, /channel = 'public-beta'/)
+})
+
+test('automatic save setup backs up and idempotently enables the local telemetry mod', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'shipos-save-test-'))
+  try {
+    const saves = join(root, 'Saves')
+    const data = join(root, 'Data')
+    const world = join(saves, '123456789', 'Test World')
+    await mkdir(world, { recursive: true })
+    await mkdir(data, { recursive: true })
+    await writeFile(join(data, 'auto-configure-saves'), 'enabled')
+    await writeFile(join(world, 'Sandbox_config.sbc'), '<?xml version="1.0"?><MyObjectBuilder_WorldConfiguration>\r\n  <Mods>\r\n  </Mods>\r\n</MyObjectBuilder_WorldConfiguration>\r\n')
+    await writeFile(join(world, 'Sandbox.sbc'), '<?xml version="1.0"?><MyObjectBuilder_Checkpoint>\r\n  <Mods>\r\n  </Mods>\r\n</MyObjectBuilder_Checkpoint>\r\n')
+    const powershell = join(process.env.WINDIR || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    const script = fileURLToPath(new URL('../runtime/configure-saves.ps1', import.meta.url))
+    const run = () => spawnSync(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-SaveRoot', saves, '-DataRoot', data, '-IgnoreGameProcess'], { encoding: 'utf8' })
+    const first = run()
+    assert.equal(first.status, 0, first.stderr || first.stdout)
+    for (const name of ['Sandbox_config.sbc', 'Sandbox.sbc']) {
+      const value = await readFile(join(world, name), 'utf8')
+      assert.equal((value.match(/<Name>ShipOSLocalTelemetry<\/Name>/g) || []).length, 1)
+    }
+    const backupRoot = join(data, 'save-backups')
+    const firstBackups = await readdir(backupRoot)
+    assert.equal(firstBackups.length, 1)
+    assert.deepEqual((await readdir(join(backupRoot, firstBackups[0]))).sort(), ['Sandbox.sbc', 'Sandbox_config.sbc', 'world.txt'])
+    const status = JSON.parse(await readFile(join(data, 'save-configuration.json'), 'utf8'))
+    assert.equal(status.state, 'configured')
+    assert.equal(status.world, 'Test World')
+    const second = run()
+    assert.equal(second.status, 0, second.stderr || second.stdout)
+    assert.equal((await readdir(backupRoot)).length, 1)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
 })

@@ -21,7 +21,7 @@ Official help:
 
 ## Space Engineers telemetry
 
-Space Engineers is required only for live telemetry. Setup can copy `ShipOSLocalTelemetry` into the user's game Mods folder, but it does not alter a save. Enable the mod in that save's Mods list and fully reload the world. Storytelling can be used without the game.
+Space Engineers is required only for live telemetry. Express setup copies `ShipOSLocalTelemetry` into the user's Mods folder and enables it in the most recently played complete local save. It validates and backs up `Sandbox_config.sbc` and `Sandbox.sbc` before changing them and never edits while Space Engineers is running. If the game was open during setup, exit and reopen it once. Storytelling can be used without the game.
 
 ## Tablets, phones, and another PC
 

@@ -14,7 +14,7 @@ Open **Start > ShipOS > ShipOS**. If it still does not appear, inspect `%LOCALAP
 
 ## Telemetry says waiting or stale
 
-Confirm that `ShipOSLocalTelemetry` is enabled in the active save's Mods list. Save and fully reload the world after installing or updating the mod. Control a character or cockpit and wait several seconds. ShipOS watches `%APPDATA%\SpaceEngineers\Storage\ShipOSLocalTelemetry.latest.json`.
+Exit Space Engineers, start ShipOS once, then reopen the most recently played local save. Express setup and the helper enable `ShipOSLocalTelemetry` automatically while the game is closed. The configuration result is recorded in `%LOCALAPPDATA%\ShipOS\Data\save-configuration.json`; originals are retained under `save-backups`. Control a character or cockpit and wait several seconds. ShipOS watches `%APPDATA%\SpaceEngineers\Storage\ShipOSLocalTelemetry.latest.json`.
 
 ## A tablet or another PC cannot connect
 

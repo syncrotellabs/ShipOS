@@ -8,4 +8,6 @@ Pairing is a local-network trust check, not an account login. Every paired devic
 
 Local Windows administrators and other software running as your Windows user can read or modify local data. Story privacy labels organize RP files; they are not access-control boundaries among paired devices. Any paired device can read and edit the shared story, so pair only devices/people you trust and revoke devices you no longer use. Do not enter real secrets or medical information in roleplay records.
 
+Express setup may enable the local telemetry mod in the most recently played local save, but only while Space Engineers is closed. It validates both XML documents, preserves the original `Sandbox_config.sbc` and `Sandbox.sbc` under the ShipOS data folder, excludes game-created Backup directories, and confines replacements to the detected Space Engineers Saves root. Advanced setup can leave saves unchanged.
+
 The installer is currently unsigned. A signing identity, dependency review, clean-machine validation, and additional adversarial testing remain public-release requirements.
