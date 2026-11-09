@@ -1,0 +1,21 @@
+[Unit]
+Description=ShipOS hosted web service
+After=network.target
+
+[Service]
+Type=simple
+User=shipos
+Group=shipos
+WorkingDirectory=/opt/shipos/app
+EnvironmentFile=/etc/shipos/shipos.env
+ExecStart=/usr/bin/node /opt/shipos/app/hosted/server.mjs
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/shipos
+
+[Install]
+WantedBy=multi-user.target

@@ -26,7 +26,7 @@ function boot() {
   })()
 }
 
-function BetaNotice() {
+export function BetaNotice() {
   const dialog = useRef<HTMLDialogElement>(null)
   const [accepted, setAccepted] = useState(() => localStorage.getItem('shipos-beta-notice-v2') === 'accepted')
   useEffect(() => { if (!accepted && dialog.current && !dialog.current.open) dialog.current.showModal() }, [accepted])
@@ -42,7 +42,7 @@ function BetaNotice() {
   </dialog>
 }
 
-function MissionStart({ viewer }: { viewer: boolean }) {
+export function MissionStart({ viewer }: { viewer: boolean }) {
   const [mission, setMission] = usePersistentState('shipos-mission', { title: '', goal: '', startedAt: '' })
   const [title, setTitle] = useState('')
   const [goal, setGoal] = useState('')

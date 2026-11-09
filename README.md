@@ -4,6 +4,8 @@ A free, MIT-licensed companion for Space Engineers. **Telemetry** provides a liv
 
 No subscription, account, internet relay, cloud AI, or game-control channel. Storytelling is experimental fiction, not observed game state.
 
+The optional hosted build uses Echoboard HQ WordPress only as an identity provider: members are read-only and WordPress administrators can edit hosted records. It never receives WordPress passwords and does not relay local Space Engineers telemetry. See [Hosted ShipOS deployment](docs/HOSTED_DEPLOYMENT.md).
+
 ## Windows installation
 
 Run `ShipOS-0.2.0-beta.5-Setup.exe` and choose **Install ShipOS**. Express setup verifies the PC, installs the application, private Node 24 runtime, helper/tray launcher, shortcuts, uninstaller, and telemetry mod; backs up and enables the mod in the most recently played local save; starts the helper with Windows; and opens ShipOS. Advanced options remain available. No administrator access is normally needed. Windows 10/11 x64 is the beta target. Setup is offline: it never downloads prerequisites or silently changes Windows Firewall. This build is **unsigned**; signing and a clean second-PC test remain release gates. See [REQUIREMENTS.md](REQUIREMENTS.md) before distributing it.

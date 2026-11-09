@@ -11,6 +11,8 @@
     "schema": "node scripts/generate-state-schema.mjs",
     "dev": "vite",
     "build": "node scripts/generate-state-schema.mjs && tsc -b && vite build",
+    "build:hosted": "node scripts/build-hosted.mjs",
+    "start:hosted": "node hosted/server.mjs",
     "typecheck": "tsc -b",
     "test": "node --test tests/*.test.mjs",
     "preview": "vite preview"

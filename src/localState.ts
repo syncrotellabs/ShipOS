@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 
-export type LocalSession = { role: 'admin' | 'editor'; worldId: string }
+export type LocalSession = { role: 'admin' | 'editor' | 'viewer'; worldId: string; displayName?: string }
 export type WorldState = { worldId: string; name: string; state: Record<string, unknown>; revision: number; updatedAt: string }
 let saved: WorldState
 let prefix = ''
@@ -11,6 +11,7 @@ let busy = false
 let conflict = false
 let serial = 0
 let timer: number | undefined
+let sessionRole: LocalSession['role'] = 'viewer'
 const localKeys = new Set([
   'shipos-current-position', 'shipos-last-telemetry-packet', 'shipos-telemetry-history',
   'shipos-contact-memory', 'shipos-contact-memory-visible', 'shipos-bridge-config',
@@ -41,7 +42,8 @@ export async function localApi<T>(route: string, body?: unknown, method = 'POST'
   return value as T
 }
 
-export function initializeLocalState(_nextSession: LocalSession, state: WorldState) {
+export function initializeLocalState(nextSession: LocalSession, state: WorldState) {
+  sessionRole = nextSession.role
   saved = state; prefix = `shipos-beta-v2:${state.worldId}:`
   cache.clear(); pending.clear(); conflict = false
   for (const key of localKeys) {
@@ -136,6 +138,10 @@ export function usePersistentState<T>(key: string, initialValue: T): readonly [T
   const update = useCallback<Dispatch<SetStateAction<T>>>((action) => {
     const next = typeof action === 'function' ? (action as (value: T) => T)(current.current) : action
     if (JSON.stringify(next) === JSON.stringify(current.current)) return
+    if (shared(key) && sessionRole === 'viewer') {
+      notify('Read-only WordPress access. An administrator must make shared changes.')
+      return
+    }
     if (shared(key) && conflict) {
       notify('Editing paused. Download your draft and reload the saved story.')
       return
