@@ -41,7 +41,7 @@ The service watches `%APPDATA%\SpaceEngineers\Storage\ShipOSLocalTelemetry.lates
 
 Shared story edits use optimistic revisions: conflicts stop editing and preserve a recoverable browser draft instead of silently overwriting another console. Reset/restore makes a snapshot first. The newest 30 snapshots are kept. Original pre-beta browser records are not modified or automatically imported.
 
-AI is optional. Configure an already-installed model at the fixed local OpenAI-compatible endpoint `http://127.0.0.1:11434/v1/chat/completions`. ShipOS does not install a model, download one, or contact a remote provider. Prompts send context to that local service only when requested. Ensure the model service itself is configured for offline use. Generated replies are suggestions; the player decides canon.
+AI is optional. Ollama may run on the gaming PC or another computer on the same trusted private LAN. ShipOS accepts only `127.0.0.1` or a private IPv4 address and uses the fixed endpoint `http://<AI-PC>:11434/v1/chat/completions`; public hosts and arbitrary URLs are rejected. ShipOS does not install Ollama, download a model, or contact a cloud AI provider. Prompts send context to the configured Ollama computer only when requested. Generated replies are suggestions; the player decides canon. See [Remote Ollama setup](docs/REMOTE_OLLAMA.md) to leave only ShipOS and Space Engineers on the gaming PC.
 
 ## Development and packaging
 

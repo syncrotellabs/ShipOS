@@ -29,9 +29,9 @@ The gaming PC must run ShipOS. Other devices need only a modern browser and the 
 
 ShipOS does not create a firewall rule. If Windows blocks LAN access, allow the bundled `node.exe` only on a trusted **Private** network. Never expose port 5174 to the internet, port-forward it, or use ShipOS on public Wi-Fi.
 
-## Optional local AI
+## Optional private-network AI
 
-Manual Storytelling does not require AI. The optional AI feature expects an already-installed OpenAI-compatible local model service at `http://127.0.0.1:11434/v1/chat/completions`. ShipOS does not install an AI application, download a model, or contact a cloud AI provider.
+Manual Storytelling does not require AI. The optional AI feature expects an already-installed Ollama service on the gaming PC or another computer on the same trusted private network. ShipOS accepts only `127.0.0.1` or an RFC1918 private IPv4 address and always uses port `11434`; public hosts and arbitrary URLs are rejected. The AI computer needs enough RAM or VRAM for the selected model. ShipOS does not install an AI application, download a model, or contact a cloud AI provider. See [Remote Ollama setup](docs/REMOTE_OLLAMA.md).
 
 ## Unsupported configurations
 

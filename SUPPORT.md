@@ -24,6 +24,10 @@ Both devices must be on the same trusted private LAN/Wi-Fi. Regenerate the pairi
 
 ShipOS stops the edit instead of silently overwriting a newer revision. Download the recovery draft, reload the saved story, and reapply the intended change. Use Configuration on the gaming PC to create or restore a backup.
 
+## ShipOS cannot reach Ollama on another computer
+
+On the AI computer, confirm Ollama is running with `OLLAMA_HOST=0.0.0.0:11434`, the requested model is installed, and the operating-system firewall allows TCP `11434` only from the trusted Private network or gaming PC. From the gaming PC, run `Invoke-RestMethod http://AI-COMPUTER-IP:11434/api/tags` in PowerShell. Use that numeric private IPv4 address and the exact installed model name in ShipOS Configuration. Do not use a public IP, hostname, port-forward, or public Wi-Fi. See [Remote Ollama setup](docs/REMOTE_OLLAMA.md).
+
 ## Uninstall
 
 Use **Start > ShipOS > Uninstall ShipOS** or Windows Installed apps. Uninstall removes the active app, helper, and shortcuts. It intentionally retains stories, backups, logs, the telemetry mod, and rollback copies.

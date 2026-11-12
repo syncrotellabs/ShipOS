@@ -120,11 +120,13 @@ test('telemetry validates required fields, deduplicates, and rejects late or ove
   assert.equal((await (await request('/api/telemetry/history')).json()).length, 1)
 })
 
-test('local AI is optional and disabled until explicitly configured', async t => {
+test('AI is optional and restricted to loopback or private-LAN Ollama hosts', async t => {
   const { request } = await fixture(t)
   assert.deepEqual(await (await request('/api/ai/models')).json(), [])
   assert.equal((await request('/api/ai/brief', { content: 'Hello' })).status, 503)
-  assert.equal((await request('/api/admin/ai', { model: 'test-model:small', enabled: true })).status, 200)
+  assert.equal((await request('/api/admin/ai', { model: 'test-model:small', host: '8.8.8.8', enabled: true })).status, 400)
+  assert.equal((await request('/api/admin/ai', { model: 'test-model:small', host: 'model.example.com', enabled: true })).status, 400)
+  assert.equal((await request('/api/admin/ai', { model: 'test-model:small', host: '192.168.42.20', enabled: true })).status, 200)
   const models = await (await request('/api/ai/models')).json()
-  assert.equal(models[0].providerName, 'Local')
+  assert.equal(models[0].providerName, 'LAN 192.168.42.20')
 })

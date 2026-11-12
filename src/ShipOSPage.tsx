@@ -3544,6 +3544,17 @@ function cleanTelemetryContactName(value: string) {
   return withoutPrefix || original
 }
 
+function isGenericSubgridName(value?: string) {
+  const normalized = cleanTelemetryContactName(String(value || ''))
+    .replace(/[\s_-]+/g, ' ')
+    .trim()
+  return /^(?:(?:small|large)\s+)?sub\s*grid(?:\s*[#-]?\s*\d+)?$/i.test(normalized)
+}
+
+function isGenericSubgridContact(contact: ShipContact) {
+  return isGenericSubgridName(contact.name) || isGenericSubgridName(contact.sourceName)
+}
+
 function isInternalTelemetryContactName(value: string) {
   const normalized = value.trim().toLowerCase()
   if (!normalized) return false
@@ -3625,7 +3636,7 @@ function originalNameForContact(contact: ShipContact) {
 }
 
 function shouldShowContactLabel(contact: ShipContact, selected: boolean) {
-  if (contact.kind === 'asteroid') return false
+  if (contact.kind === 'asteroid' || isGenericSubgridContact(contact)) return false
   if (selected) return true
   if (isFriendlyContact(contact)) return true
   return ['gps', 'waypoint', 'signal', 'station', 'relay', 'custom'].includes(contact.kind)
@@ -4124,15 +4135,6 @@ function nonBodyVisualRadius(contact: ShipContact, selected: boolean) {
   return selected ? base * 1.38 : base
 }
 
-function createContactGeometry(contact: ShipContact, selected: boolean) {
-  const radius = nonBodyVisualRadius(contact, selected)
-  if (contact.kind === 'asteroid') return new THREE.SphereGeometry(radius, 12, 12)
-  if (contact.kind === 'radar') return new THREE.TorusGeometry(radius * 0.9, Math.max(0.06, radius * 0.12), 8, 28)
-  if (contact.kind === 'signal') return new THREE.TetrahedronGeometry(radius * 1.12, 0)
-  if (contact.kind === 'gps' || contact.kind === 'waypoint' || contact.kind === 'custom') return new THREE.SphereGeometry(radius, 16, 16)
-  return new THREE.OctahedronGeometry(radius, 0)
-}
-
 function moonVisualOrbitRadius(body: ShipContact, parent: ShipContact, scale = mapScale, bodyScaleMode: BodyScaleMode = 'tactical') {
   const rawRadius = planarDistanceMeters(parent, body) * scale
   if (!isMoonBody(body)) return Math.max(2.5, rawRadius)
@@ -4279,7 +4281,25 @@ function seededRandom(seed: number) {
   }
 }
 
-const planetTextureCache = new Map<string, THREE.CanvasTexture>()
+const planetTextureCache = new Map<string, THREE.Texture>()
+const planetTextureLoader = new THREE.TextureLoader()
+const nasaPlanetTextureUrls: Partial<Record<PlanetEnvironment, string>> = {
+  earthlike: '/shipos/textures/planets/earth-blue-marble-1024.png',
+  moon: '/shipos/textures/planets/moon-lro-1024.jpg',
+  airless: '/shipos/textures/planets/moon-lro-1024.jpg',
+  mars: '/shipos/textures/planets/mars-viking-1024.jpg',
+  ice: '/shipos/textures/planets/europa-voyager-1024.jpg',
+  desert: '/shipos/textures/planets/venus-magellan-1024.jpg',
+}
+
+function configurePlanetTexture(texture: THREE.Texture) {
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.wrapS = THREE.RepeatWrapping
+  texture.wrapT = THREE.ClampToEdgeWrapping
+  texture.anisotropy = 4
+  texture.userData.shipOsCached = true
+  return texture
+}
 
 function drawPlanetBlob(
   context: CanvasRenderingContext2D,
@@ -4314,6 +4334,12 @@ function createPlanetTexture(contact: ShipContact) {
   const cacheKey = `${contact.id}:${contact.color}:${contact.generatorName || ''}:${contact.hasAtmosphere ?? 'unknown'}:${environment}`
   const cached = planetTextureCache.get(cacheKey)
   if (cached) return cached
+  const nasaTextureUrl = nasaPlanetTextureUrls[environment]
+  if (nasaTextureUrl) {
+    const texture = configurePlanetTexture(planetTextureLoader.load(nasaTextureUrl))
+    planetTextureCache.set(cacheKey, texture)
+    return texture
+  }
   const profile = planetSkinProfiles[environment]
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
@@ -4424,12 +4450,7 @@ function createPlanetTexture(contact: ShipContact) {
     context.fillRect(0, 0, canvas.width, canvas.height)
   }
 
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  texture.wrapS = THREE.RepeatWrapping
-  texture.wrapT = THREE.ClampToEdgeWrapping
-  texture.anisotropy = 4
-  texture.userData.shipOsCached = true
+  const texture = configurePlanetTexture(new THREE.CanvasTexture(canvas))
   planetTextureCache.set(cacheKey, texture)
   return texture
 }
@@ -4458,31 +4479,24 @@ function createBodyLabel(text: string, color: string, selected: boolean) {
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
   const labelText = text.length > 60 ? text.slice(0, 59) + '…' : text
-  if (context) context.font = '900 46px "IBM Plex Mono", "Share Tech Mono", monospace'
+  if (context) context.font = '700 52px "Rajdhani", "IBM Plex Mono", sans-serif'
   canvas.width = Math.max(512, Math.ceil(context?.measureText(labelText).width ?? 480) + 40)
   canvas.height = 128
   if (context) {
     context.clearRect(0, 0, canvas.width, canvas.height)
-    context.fillStyle = 'rgba(2, 7, 9, 0.82)'
-    context.fillRect(8, 18, canvas.width - 16, 66)
-    context.strokeStyle = color
-    context.globalAlpha = selected ? 0.82 : 0.58
-    context.strokeRect(8, 18, canvas.width - 16, 66)
     context.globalAlpha = 1
-    context.font = '900 46px "IBM Plex Mono", "Share Tech Mono", monospace'
+    context.font = '700 52px "Rajdhani", "IBM Plex Mono", sans-serif'
     context.textAlign = 'center'
     context.textBaseline = 'middle'
+    context.lineJoin = 'round'
+    context.lineWidth = selected ? 11 : 9
+    context.strokeStyle = 'rgba(0, 0, 0, 0.92)'
+    context.strokeText(labelText, canvas.width / 2, 58)
     context.shadowColor = color
-    context.shadowBlur = selected ? 18 : 10
+    context.shadowBlur = selected ? 20 : 12
     context.fillStyle = selected ? '#fff4d8' : '#f4eadb'
     context.fillText(labelText, canvas.width / 2, 58)
     context.shadowBlur = 0
-    context.strokeStyle = color
-    context.globalAlpha = selected ? 0.92 : 0.54
-    context.beginPath()
-    context.moveTo(154, 94)
-    context.lineTo(358, 94)
-    context.stroke()
   }
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
@@ -4501,42 +4515,33 @@ function createBodyLabel(text: string, color: string, selected: boolean) {
   return sprite
 }
 
-function createGpsCrosshairMarker(color: string, selected = false) {
+function createContactDotMarker(color: string, selected = false) {
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
-  canvas.width = 160
-  canvas.height = 160
+  canvas.width = 128
+  canvas.height = 128
   if (context) {
     const center = canvas.width / 2
-    const outer = selected ? 54 : 46
-    const innerGap = selected ? 15 : 18
     context.clearRect(0, 0, canvas.width, canvas.height)
-    context.lineCap = 'round'
-    context.lineJoin = 'round'
+    const halo = context.createRadialGradient(center, center, 2, center, center, selected ? 52 : 44)
+    halo.addColorStop(0, color)
+    halo.addColorStop(0.2, color)
+    halo.addColorStop(0.45, hexToRgba(color, selected ? 0.52 : 0.34))
+    halo.addColorStop(1, hexToRgba(color, 0))
+    context.fillStyle = halo
+    context.fillRect(0, 0, canvas.width, canvas.height)
     context.shadowColor = color
-    context.shadowBlur = selected ? 22 : 16
-    context.strokeStyle = color
-    context.lineWidth = selected ? 8 : 6
-    context.globalAlpha = selected ? 0.98 : 0.88
+    context.shadowBlur = selected ? 22 : 14
+    context.fillStyle = selected ? '#fff4d8' : color
     context.beginPath()
-    context.arc(center, center, outer * 0.62, 0, Math.PI * 2)
-    context.stroke()
-    context.beginPath()
-    context.moveTo(center - outer, center)
-    context.lineTo(center - innerGap, center)
-    context.moveTo(center + innerGap, center)
-    context.lineTo(center + outer, center)
-    context.moveTo(center, center - outer)
-    context.lineTo(center, center - innerGap)
-    context.moveTo(center, center + innerGap)
-    context.lineTo(center, center + outer)
-    context.stroke()
-    context.shadowBlur = 0
-    context.fillStyle = '#f4eadb'
-    context.globalAlpha = selected ? 1 : 0.88
-    context.beginPath()
-    context.arc(center, center, selected ? 5 : 4, 0, Math.PI * 2)
+    context.arc(center, center, selected ? 15 : 12, 0, Math.PI * 2)
     context.fill()
+    context.shadowBlur = 0
+    context.strokeStyle = selected ? '#fff4d8' : hexToRgba(color, 0.96)
+    context.lineWidth = selected ? 5 : 3
+    context.beginPath()
+    context.arc(center, center, selected ? 28 : 22, 0, Math.PI * 2)
+    context.stroke()
   }
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
@@ -4544,14 +4549,14 @@ function createGpsCrosshairMarker(color: string, selected = false) {
     map: texture,
     depthTest: false,
     depthWrite: false,
-    opacity: selected ? 1 : 0.94,
+    opacity: selected ? 1 : 0.96,
     sizeAttenuation: false,
     transparent: true,
   })
   const sprite = new THREE.Sprite(material)
-  const size = selected ? 0.078 : 0.058
+  const size = selected ? 0.082 : 0.064
   sprite.scale.set(size, size, 1)
-  sprite.renderOrder = selected ? 25 : 22
+  sprite.renderOrder = selected ? 28 : 24
   return sprite
 }
 
@@ -5392,7 +5397,6 @@ function ShipSystemMap({
 
     contacts.forEach((contact) => {
       const isSelected = contact.id === selectedContactId || contact.id === focusContactId
-      const isHostile = isHostileContact(contact)
       const contactColor = contact.kind === 'gps' ? '#3dff93' : displayColorForContact(contact)
       const bodyIsReference = mapProjection.liveFocus
         && contact.kind === 'body'
@@ -5404,59 +5408,48 @@ function ShipSystemMap({
         addDefenseEnvelope(markerGroup, markerPosition, mapProjection.scale, isSelected, defenseEnvelope.color, defenseEnvelope.ranges)
       }
 
-      if (contact.kind === 'gps') {
-        const marker = createGpsCrosshairMarker(contactColor, isSelected)
+      if (contact.kind !== 'body') {
+        const marker = createContactDotMarker(contactColor, isSelected)
         marker.position.copy(markerPosition)
         marker.userData.contactId = contact.id
         markerGroup.add(marker)
       } else {
-        const geometry = contact.kind === 'body'
-          ? new THREE.SphereGeometry(isSelected ? radius * 1.12 : radius, 36, 36)
-          : createContactGeometry(contact, isSelected)
-        const material = contact.kind === 'body'
-          ? new THREE.MeshStandardMaterial({
-            color: '#ffffff',
-            emissive: contactColor,
-            emissiveIntensity: isSelected ? 0.18 : 0.06,
-            map: createPlanetTexture(contact),
-            metalness: 0,
-            roughness: 0.82,
-          })
-          : new THREE.MeshStandardMaterial({
-            color: contactColor,
-            emissive: contactColor,
-            emissiveIntensity: isHostile ? (isSelected ? 1.35 : 0.94) : isSelected ? 0.82 : 0.35,
-            roughness: 0.35,
-          })
+        const geometry = new THREE.SphereGeometry(isSelected ? radius * 1.12 : radius, 36, 36)
+        const material = new THREE.MeshStandardMaterial({
+          color: '#ffffff',
+          emissive: contactColor,
+          emissiveIntensity: isSelected ? 0.18 : 0.06,
+          map: createPlanetTexture(contact),
+          metalness: 0,
+          roughness: 0.82,
+        })
         const marker = new THREE.Mesh(geometry, material)
         marker.position.copy(markerPosition)
         marker.userData.contactId = contact.id
-        if (contact.kind === 'body') marker.userData.spinRate = isMoonBody(contact) ? 0.0012 : 0.0007
+        marker.userData.spinRate = isMoonBody(contact) ? 0.0012 : 0.0007
         markerGroup.add(marker)
 
-        if (contact.kind === 'body') {
-          const glow = new THREE.Mesh(
-            new THREE.SphereGeometry(radius * 1.34, 36, 36),
-            new THREE.MeshBasicMaterial({
-              color: contactColor,
-              depthWrite: false,
-              opacity: isSelected ? 0.18 : 0.1,
-              transparent: true,
-            }),
-          )
-          disableMapPicking(glow)
-          glow.position.copy(markerPosition)
-          markerGroup.add(glow)
+        const glow = new THREE.Mesh(
+          new THREE.SphereGeometry(radius * 1.34, 36, 36),
+          new THREE.MeshBasicMaterial({
+            color: contactColor,
+            depthWrite: false,
+            opacity: isSelected ? 0.18 : 0.1,
+            transparent: true,
+          }),
+        )
+        disableMapPicking(glow)
+        glow.position.copy(markerPosition)
+        markerGroup.add(glow)
 
-          const label = createBodyLabel(contact.name, contactColor, isSelected)
-          if (bodyIsReference) setMapLabelScale(label, isMoonBody(contact) ? 5.8 : 7.2, isMoonBody(contact) ? 1.44 : 1.78, 0.3, 1.06)
-          else if (isMoonBody(contact)) setMapLabelScale(label, isSelected ? 9.4 : 7.8, isSelected ? 2.32 : 1.92, 0.3, 1.08)
-          else setMapLabelScale(label, isSelected ? 12.2 : 10.2, isSelected ? 3.0 : 2.5, 0.3, 1.1)
-          label.position.copy(markerPosition)
-          label.position.y += radius + (isMoonBody(contact) ? 2.35 : isSelected ? 4.1 : 3.4)
-          disableMapPicking(label)
-          markerGroup.add(label)
-        }
+        const label = createBodyLabel(contact.name, contactColor, isSelected)
+        if (bodyIsReference) setMapLabelScale(label, isMoonBody(contact) ? 5.8 : 7.2, isMoonBody(contact) ? 1.44 : 1.78, 0.3, 1.06)
+        else if (isMoonBody(contact)) setMapLabelScale(label, isSelected ? 9.4 : 7.8, isSelected ? 2.32 : 1.92, 0.3, 1.08)
+        else setMapLabelScale(label, isSelected ? 12.2 : 10.2, isSelected ? 3.0 : 2.5, 0.3, 1.1)
+        label.position.copy(markerPosition)
+        label.position.y += radius + (isMoonBody(contact) ? 2.35 : isSelected ? 4.1 : 3.4)
+        disableMapPicking(label)
+        markerGroup.add(label)
       }
 
       if (contact.kind !== 'body' && shouldShowContactLabel(contact, isSelected)) {

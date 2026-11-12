@@ -5,9 +5,12 @@ ShipOS runtime distributions include the following third-party software:
 - React and React DOM — Copyright (c) Meta Platforms, Inc. and affiliates — MIT License
 - three.js — Copyright © 2010-2026 three.js authors — MIT License
 - qrcode — Copyright (c) 2012 Ryan Day — MIT License
+- Rajdhani font — Copyright 2014 The Rajdhani Project Authors — SIL Open Font License 1.1
 - Node.js 24 — Node.js contributors and bundled-library authors — full notices in `runtime/licenses/Node-LICENSE.txt` (packaged as `licenses/Node-LICENSE.txt`).
 
 Full license files for the JavaScript runtime dependency tree are included in `runtime/licenses/` and copied into each offline distribution.
+
+Low-resolution Earth, Moon, Mars, Europa and Venus texture maps are derived from NASA mission imagery and scientific visualizations. Per-file sources and credits are recorded in `public/shipos/textures/planets/README.md`. Their use does not imply NASA endorsement.
 
 The MIT License text applying to these packages is reproduced below.
 

@@ -209,7 +209,7 @@
 
 .shipOsFullPage {
   --shipos-ui-font-size: 13px;
-  --shipos-ui-font-family: "Share Tech Mono", "IBM Plex Mono", "Rajdhani", "Eurostile", "Bank Gothic", Consolas, monospace;
+  --shipos-ui-font-family: "Rajdhani", "Share Tech Mono", "IBM Plex Mono", "Eurostile", "Bank Gothic", Consolas, sans-serif;
   min-height: 100vh;
   padding: clamp(8px, 1vw, 14px);
   background:

@@ -14,7 +14,7 @@ Sharing is off by default. If the player enables it, ShipOS serves the selected 
 
 ## Optional AI
 
-AI is disabled by default. If the player configures a compatible service at `127.0.0.1:11434`, ShipOS sends the requested story prompt and relevant local context to that service. The privacy behavior of the separately installed model service is controlled by that software, not ShipOS.
+AI is disabled by default. If the player configures Ollama on this PC or another private-LAN computer, ShipOS sends the requested story prompt and relevant local context to that computer over unencrypted HTTP. ShipOS accepts only loopback or a private IPv4 address and never sends these prompts to syncrotellabs. Restrict the Ollama firewall rule to the trusted Private network—preferably to the gaming PC's source address—and never port-forward port `11434`. The privacy behavior of the separately installed Ollama service is controlled by that software, not ShipOS.
 
 ## No collection by syncrotellabs
 

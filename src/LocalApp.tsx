@@ -8,7 +8,7 @@ type Status = {
   version: string; worldId: string; worldName: string; dataDir?: string
   telemetry: { connected: boolean; stamp: string | null; error: string; stableWorldIdentity: boolean; watchFile?: string }
   sharing: { enabled: boolean; url: string | null; address: string | null; addresses?: string[] }
-  ai: { enabled: boolean; model: string }
+  ai: { enabled: boolean; model: string; host: string }
 }
 type Device = { id: string; label: string; role: 'editor' }
 let bootPromise: Promise<{ session: LocalSession; world: WorldState }> | undefined
@@ -36,7 +36,7 @@ export function BetaNotice() {
     <h2 id="beta-title">Your game. Your story.<br />Still a work in progress.</h2>
     <p>ShipOS is a free, open-source companion for local, single-player Space Engineers.</p>
     <p><strong>Storytelling and AI roleplay are especially experimental.</strong> Fictional messages, missions, accounts, and advice are not live game facts. ShipOS does not control your game.</p>
-    <p>Your records stay on the gaming PC. Optional tablet sharing works on your trusted local network only; optional AI uses a model running on that PC.</p>
+    <p>Your records stay on the gaming PC. Optional tablet sharing works on your trusted local network only; optional AI can run on this PC or another computer on that private network.</p>
     <p className="betaMuted">Back up important stories. If telemetry goes stale, the screen shows the last known reading.</p>
     <button autoFocus className="betaPrimary" onClick={() => { localStorage.setItem('shipos-beta-notice-v2', 'accepted'); dialog.current?.close(); setAccepted(true) }}>Got it — let’s play</button>
   </dialog>
@@ -65,6 +65,7 @@ function LocalSettings({ session, status, refresh }: { session: LocalSession; st
   const [expires, setExpires] = useState(0)
   const [devices, setDevices] = useState<Device[]>([])
   const [model, setModel] = useState(status?.ai.model || '')
+  const [aiHost, setAiHost] = useState(status?.ai.host || '127.0.0.1')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [resetText, setResetText] = useState('')
@@ -76,6 +77,7 @@ function LocalSettings({ session, status, refresh }: { session: LocalSession; st
     return () => window.clearInterval(timer)
   }, [admin])
   useEffect(() => { setModel(status?.ai.model || '') }, [status?.ai.model])
+  useEffect(() => { setAiHost(status?.ai.host || '127.0.0.1') }, [status?.ai.host])
   const act = async (fn: () => Promise<void>) => {
     setBusy(true); setMessage('')
     try { await fn(); await refresh(); if (admin) setDevices(await localApi<Device[]>('/api/admin/devices')) }
@@ -98,9 +100,11 @@ function LocalSettings({ session, status, refresh }: { session: LocalSession; st
       <p className="betaMuted">If Safari cannot connect, check Windows Firewall and Wi-Fi client isolation. Allow ShipOS only on a trusted private network. No public-network rule is installed automatically.</p>
       {devices.map(device => <div className="betaDevice" key={device.id}><span>{device.label}</span><b>Story read + write</b><button onClick={() => void act(async () => { await localApi('/api/admin/devices', { id: device.id, revoke: true }) })}>Revoke</button></div>)}
     </section>
-    <section className="betaSettingsSection"><h3>Optional local AI</h3><p>Connect an already-installed local model server at <code>127.0.0.1:11434</code> using its OpenAI-compatible API. ShipOS does not download models or contact cloud AI.</p>
-      <label>Installed model name<input value={model} onChange={event => setModel(event.target.value)} placeholder="Exact name from your local model server" maxLength={160} /></label>
-      <div className="betaActions"><button disabled={busy || !model.trim()} onClick={() => void act(async () => { await localApi('/api/admin/ai', { model: model.trim(), enabled: true }); setMessage('Local AI enabled. Switch to Storytelling to use it.'); window.dispatchEvent(new Event('shipos:ai-settings')) })}>Enable local AI</button><button disabled={busy} onClick={() => void act(async () => { await localApi('/api/admin/ai', { model: model.trim(), enabled: false }); window.dispatchEvent(new Event('shipos:ai-settings')) })}>Disable AI</button></div>
+    <section className="betaSettingsSection"><h3>Optional private-network AI</h3><p>Ollama can run on this gaming PC or another computer on the same trusted private network. ShipOS accepts only <code>127.0.0.1</code> or a private IPv4 address and always uses port <code>11434</code>; public hosts and arbitrary URLs are rejected.</p>
+      <label>AI computer IPv4 address<input value={aiHost} onChange={event => setAiHost(event.target.value)} placeholder="127.0.0.1 or 192.168.1.50" inputMode="decimal" maxLength={15} /></label>
+      <label>Installed Ollama model name<input value={model} onChange={event => setModel(event.target.value)} placeholder="Exact model name installed on the AI computer" maxLength={160} /></label>
+      <div className="betaActions"><button disabled={busy || !model.trim() || !aiHost.trim()} onClick={() => void act(async () => { await localApi('/api/admin/ai', { model: model.trim(), host: aiHost.trim(), enabled: true }); setMessage('Private-network AI enabled. Switch to Storytelling to use it.'); window.dispatchEvent(new Event('shipos:ai-settings')) })}>Enable AI computer</button><button disabled={busy} onClick={() => void act(async () => { await localApi('/api/admin/ai', { model: model.trim(), host: aiHost.trim() || '127.0.0.1', enabled: false }); window.dispatchEvent(new Event('shipos:ai-settings')) })}>Disable AI</button></div>
+      <p className="betaMuted">Remote prompts travel as unencrypted HTTP inside your LAN. Restrict Ollama and TCP 11434 to the trusted Private network—never port-forward it.</p>
     </section>
     <section className="betaSettingsSection"><h3>Story data & recovery</h3><p>SQLite database on this PC. Each identified game world has separate story records. Reset and restore create a local snapshot first; the newest 30 snapshots are kept.</p>
       <p className="betaMuted">{status?.dataDir}</p>

@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import test from 'node:test'
 
 const webSourceUrl = new URL('../src/ShipOSPage.tsx', import.meta.url)
 const modSourceUrl = new URL('../public/shipos/addons/shipos-local-telemetry-mod/ShipOSLocalTelemetry/Data/Scripts/ShipOSLocalTelemetry/ShipOSLocalTelemetrySession.cs', import.meta.url)
 const pluginSourceUrl = new URL('../integrations/legacy-client-plugin/Plugin.cs', import.meta.url)
+const planetTextureDirectoryUrl = new URL('../public/shipos/textures/planets/', import.meta.url)
 
 test('ShipOS keeps neutral presets separate from stable live Space Engineers identities', async () => {
   const source = await readFile(webSourceUrl, 'utf8')
@@ -28,6 +29,24 @@ test('planet textures follow live Space Engineers environment metadata', async (
   assert.match(source, /environment === 'earthlike'/)
   assert.match(source, /const craterCount = airless \? 78/)
   assert.match(source, /const cloudCount = contact\.hasAtmosphere === false \|\| airless \? 0/)
+  assert.match(source, /earthlike: '\/shipos\/textures\/planets\/earth-blue-marble-1024\.png'/)
+  assert.match(source, /moon: '\/shipos\/textures\/planets\/moon-lro-1024\.jpg'/)
+  assert.match(source, /mars: '\/shipos\/textures\/planets\/mars-viking-1024\.jpg'/)
+  assert.match(source, /ice: '\/shipos\/textures\/planets\/europa-voyager-1024\.jpg'/)
+  assert.match(source, /desert: '\/shipos\/textures\/planets\/venus-magellan-1024\.jpg'/)
+  assert.match(source, /if \(nasaTextureUrl\)/)
+})
+
+test('credited low-resolution planetary texture assets are bundled', async () => {
+  for (const name of ['earth-blue-marble-1024.png', 'moon-lro-1024.jpg', 'mars-viking-1024.jpg', 'europa-voyager-1024.jpg', 'venus-magellan-1024.jpg']) {
+    const file = await stat(new URL(name, planetTextureDirectoryUrl))
+    assert.ok(file.isFile())
+    assert.ok(file.size > 50_000)
+    assert.ok(file.size < 500_000)
+  }
+  const credits = await readFile(new URL('README.md', planetTextureDirectoryUrl), 'utf8')
+  assert.match(credits, /NASA\/Goddard Space Flight Center/)
+  assert.match(credits, /do(?:es)? not imply NASA endorsement/)
 })
 
 test('the local world mod publishes planets globally instead of classifying them as asteroids', async () => {

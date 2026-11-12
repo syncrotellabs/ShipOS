@@ -2,7 +2,7 @@
 
 Report suspected vulnerabilities privately to **syncrotellabs@gmail.com**. Include the version, reproduction steps, and a redacted diagnostic log. Do not post pairing codes, private story backups, or personal data in a public issue.
 
-Only local single-player use is supported. Loopback is the default. Optional LAN access is authenticated but uses unencrypted HTTP, so use a trusted network only. Never port-forward, reverse-proxy, or expose this beta on the internet. The app deliberately has no cloud relay, login service, or game command channel.
+Only local single-player use is supported. Loopback is the default. Optional browser sharing and remote Ollama access use unencrypted HTTP, so use a trusted network only. Never port-forward, reverse-proxy, or expose ports `5174` or `11434` on the internet. ShipOS restricts its AI target to loopback or an RFC1918 private IPv4 address and a fixed Ollama port/path. The app deliberately has no cloud relay, login service, or game command channel.
 
 Pairing is a local-network trust check, not an account login. Every paired device can read and write Storytelling records immediately; only the gaming PC can change sharing/AI settings, make administrative backups/resets/restores, inspect the device list, or revoke access. Pairing codes expire after two minutes and are single-use; device cookies expire after 30 days. The database stores hashes, not raw bearer tokens. Story writes require a revision match, and reset/restore retains a snapshot.
 

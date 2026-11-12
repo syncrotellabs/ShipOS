@@ -3,7 +3,7 @@
 ## Verified here
 
 - Production TypeScript/Vite build succeeds. The legacy view remains a large JavaScript bundle (~1.1 MB uncompressed); feature splitting is follow-up work.
-- Twenty-seven automated tests cover authentication/Host/Origin protections, single-use account-free Storytelling read/write pairing, PC-only administration, revocation, SQLite restart persistence, world isolation, revision conflicts, reset/restore snapshots, invalid packet/state rejection, optional local AI configuration, the express/advanced installer and release-document contract, automatic backed-up save configuration, retained UI/data regressions, and tagged-fleet behavior.
+- Automated tests cover authentication/Host/Origin protections, single-use account-free Storytelling read/write pairing, PC-only administration, revocation, SQLite restart persistence, world isolation, revision conflicts, reset/restore snapshots, invalid packet/state rejection, private-LAN AI target restrictions, the express/advanced installer and release-document contract, automatic backed-up save configuration, retained UI/data regressions, and tagged-fleet behavior.
 - Browser checks: first-visit beta modal, live file telemetry, initially closed configuration drawer, both main pages, zero-state Star System prompt, mission creation, and that mission loading in a second console.
 - A clean profile remains at revision zero while telemetry updates. Sensor ticks no longer pollute the shared story log.
 - Updated local mod compiles against this PC's Space Engineers assemblies using the .NET Framework compiler. One existing obsolete-enum compatibility warning remains; no compilation errors.
@@ -24,7 +24,7 @@
 - Synthetic isolated browser checks confirmed Player first, separate drone readings (12 m/s, 120 m altitude, 73.5% battery), unavailable base systems labelled Not reported, and fallback to Player with a notice when the selected grid disappears. This is not yet a live multi-grid game test.
 - Scan a newly generated pairing QR on the actual iPad. Verify Safari/WebGL, touch interaction, sleep/wake, reconnect, stale telemetry, portrait uploads, and editing/revocation across devices.
 - Current Windows network profile/firewall may block LAN access. No firewall rule or network profile was changed. Allow only trusted Private-network access if required.
-- Configure an installed offline local model if desired. No model was installed or downloaded; an actual generated reply has not been end-to-end tested.
+- Configure an installed offline Ollama model locally or on a trusted-LAN computer if desired. No model was installed or downloaded; an actual generated reply and the remote-computer path have not been end-to-end tested.
 
 ## Before public donationware release
 
