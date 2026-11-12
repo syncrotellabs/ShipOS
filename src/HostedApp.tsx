@@ -30,22 +30,19 @@ export function HostedApp() {
   const [ready, setReady] = useState<HostedReady | null>(null)
   const [error, setError] = useState('')
   const [page, setPage] = useState<'telemetry' | 'story'>(() => new URLSearchParams(location.search).get('page') === 'story' ? 'story' : 'telemetry')
-  const [sync, setSync] = useState('Opening hosted records…')
   useEffect(() => {
     let cancelled = false
-    void bootHosted().then(value => { if (!cancelled) { setReady(value); setSync(value.session.role === 'admin' ? 'Administrator editing enabled' : 'Read-only WordPress session') } }).catch((reason: Error & { status?: number }) => {
+    void bootHosted().then(value => { if (!cancelled) setReady(value) }).catch((reason: Error & { status?: number }) => {
       if (reason.status === 401) { window.location.assign('/auth/start'); return }
       if (!cancelled) setError(reason.message)
     })
-    const listener = (event: Event) => setSync((event as CustomEvent<string>).detail)
-    window.addEventListener('shipos:sync-status', listener)
-    return () => { cancelled = true; window.removeEventListener('shipos:sync-status', listener) }
+    return () => { cancelled = true }
   }, [])
   const readOnly = ready?.session.role !== 'admin'
   return <>
     <header className="betaHeader"><a href="/" className="betaBrand" aria-label="ShipOS home">SHIP<span>OS</span><small>HOSTED BETA</small></a><nav aria-label="Main pages"><button aria-current={page === 'telemetry' ? 'page' : undefined} onClick={() => setPage('telemetry')}>Telemetry</button><button aria-current={page === 'story' ? 'page' : undefined} onClick={() => setPage('story')}>Storytelling <small>RP beta</small></button></nav><span className="betaConnection">{readOnly ? 'Read only' : 'Administrator'}</span></header>
     {ready ? <>
-      <div className="betaStatus"><span>{ready.world.name}</span><span>{sync}</span></div>
+      <div className="betaStatus"><span>{ready.world.name}</span><span>{ready.session.role === 'admin' ? 'Administrator editing enabled' : 'Read-only WordPress session'}</span></div>
       {page === 'story' && <MissionStart viewer={readOnly} />}
       <ShipOSPage readOnly={readOnly} worldId={ready.world.worldId} experience={page === 'telemetry' ? 'navigation' : 'console'} configuration={<HostedAccess session={ready.session} />} />
     </> : <section className="betaMission"><h1>{error ? 'ShipOS could not open' : 'Checking your Echoboard account…'}</h1><p>{error || 'WordPress is confirming your session.'}</p>{error && <><a className="betaPrimary" href="/auth/start">Try WordPress again</a> <a href="https://echoboardhq.com/">Return to Echoboard HQ</a></>}</section>}

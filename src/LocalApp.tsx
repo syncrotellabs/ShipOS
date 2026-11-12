@@ -126,20 +126,17 @@ export function App() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState<Status | null>(null)
   const [page, setPage] = useState<'telemetry' | 'story'>(() => new URLSearchParams(location.search).get('page') === 'story' ? 'story' : 'telemetry')
-  const [sync, setSync] = useState('Saved on this PC')
   const refresh = async () => { setStatus(await localApi<Status>('/api/status')) }
   useEffect(() => {
     let cancelled = false
     void boot().then(result => { if (!cancelled) { setReady(result); void refresh().catch(() => undefined) } }).catch(error => { if (!cancelled) setError(error.message) })
     const timer = window.setInterval(() => { if (!cancelled) void refresh().catch(() => setStatus(current => current ? { ...current, telemetry: { ...current.telemetry, connected: false } } : current)) }, 3000)
-    const syncListener = (event: Event) => setSync((event as CustomEvent<string>).detail)
-    window.addEventListener('shipos:sync-status', syncListener)
-    return () => { cancelled = true; window.clearInterval(timer); window.removeEventListener('shipos:sync-status', syncListener) }
+    return () => { cancelled = true; window.clearInterval(timer) }
   }, [])
   return <>
     <header className="betaHeader"><a href="/" className="betaBrand" aria-label="ShipOS home">SHIP<span>OS</span><small>LOCAL BETA</small></a><nav aria-label="Main pages"><button aria-current={page === 'telemetry' ? 'page' : undefined} onClick={() => setPage('telemetry')}>Telemetry</button><button aria-current={page === 'story' ? 'page' : undefined} onClick={() => setPage('story')}>Storytelling <small>RP beta</small></button></nav><span className={`betaConnection ${status?.telemetry.connected ? 'live' : ''}`}>{status?.telemetry.connected ? 'Game connected' : 'Waiting / stale'}</span></header>
     {ready ? <>
-      <div className="betaStatus"><span>{status?.worldName || ready.world.name}</span><span>{ready.session.role === 'editor' ? `Paired play screen · ${sync}` : sync}</span></div>
+      <div className="betaStatus"><span>{status?.worldName || ready.world.name}</span><span>{ready.session.role === 'editor' ? 'Paired play screen' : 'Gaming PC console'}</span></div>
       {(!status?.telemetry.stableWorldIdentity || status.worldId !== ready.world.worldId) && <p className="betaNotice">{status?.worldId !== ready.world.worldId && status ? 'World changed. Reload to open its separate records.' : 'Waiting for stable world identity. Enable the bundled telemetry mod and reload your world. Until then, records belong to an unassigned local profile.'}</p>}
       {page === 'story' && <MissionStart viewer={false} />}
       <ShipOSPage readOnly={false} worldId={ready.world.worldId} experience={page === 'telemetry' ? 'navigation' : 'console'}

@@ -29,6 +29,14 @@ test('main pages, first-visit beta notice, configuration drawer, and fragment pa
   assert.match(app, /Copy pairing link/)
 })
 
+test('transient storage messages stay below the map instead of shifting telemetry', async () => {
+  const page = await read('../src/ShipOSPage.tsx')
+  const localApp = await read('../src/LocalApp.tsx')
+  assert.match(page, /className="shipOsStorageStatus" role="status"/)
+  assert.doesNotMatch(page, /className="shipOsTopBarStatus">[\s\S]{0,240}\{stateSyncStatus\}/)
+  assert.doesNotMatch(localApp, /className="betaStatus">[\s\S]{0,240}\{sync\}/)
+})
+
 test('native installer is a guided offline setup and includes start and uninstall entries', async () => {
   const setup = await read('../installer/Setup.cs')
   for (const step of ['Install ShipOS', 'Readiness check', 'Choose components', 'Ready to install', 'ShipOS is installed']) assert.match(setup, new RegExp(step))

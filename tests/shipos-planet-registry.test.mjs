@@ -18,6 +18,18 @@ test('ShipOS keeps neutral presets separate from stable live Space Engineers ide
   assert.match(source, /Live Space Engineers planet registry/)
 })
 
+test('planet textures follow live Space Engineers environment metadata', async () => {
+  const source = await readFile(webSourceUrl, 'utf8')
+
+  assert.match(source, /type PlanetEnvironment = 'earthlike' \| 'moon' \| 'mars' \| 'ice'/)
+  assert.match(source, /contact\.generatorName, contact\.name, contact\.className, contact\.notes/)
+  assert.match(source, /earthlike\|earth-like\|terran\|temperate/)
+  assert.match(source, /if \(contact\.hasAtmosphere === false\) return 'airless'/)
+  assert.match(source, /environment === 'earthlike'/)
+  assert.match(source, /const craterCount = airless \? 78/)
+  assert.match(source, /const cloudCount = contact\.hasAtmosphere === false \|\| airless \? 0/)
+})
+
 test('the local world mod publishes planets globally instead of classifying them as asteroids', async () => {
   const source = await readFile(modSourceUrl, 'utf8')
 

@@ -3625,9 +3625,9 @@ function originalNameForContact(contact: ShipContact) {
 }
 
 function shouldShowContactLabel(contact: ShipContact, selected: boolean) {
+  if (contact.kind === 'asteroid') return false
   if (selected) return true
   if (isFriendlyContact(contact)) return true
-  if (contact.kind === 'asteroid') return true
   return ['gps', 'waypoint', 'signal', 'station', 'relay', 'custom'].includes(contact.kind)
 }
 
@@ -4126,7 +4126,7 @@ function nonBodyVisualRadius(contact: ShipContact, selected: boolean) {
 
 function createContactGeometry(contact: ShipContact, selected: boolean) {
   const radius = nonBodyVisualRadius(contact, selected)
-  if (contact.kind === 'asteroid') return new THREE.DodecahedronGeometry(radius, 0)
+  if (contact.kind === 'asteroid') return new THREE.SphereGeometry(radius, 12, 12)
   if (contact.kind === 'radar') return new THREE.TorusGeometry(radius * 0.9, Math.max(0.06, radius * 0.12), 8, 28)
   if (contact.kind === 'signal') return new THREE.TetrahedronGeometry(radius * 1.12, 0)
   if (contact.kind === 'gps' || contact.kind === 'waypoint' || contact.kind === 'custom') return new THREE.SphereGeometry(radius, 16, 16)
@@ -4151,57 +4151,6 @@ const defaultSystemMapProjection: SystemMapProjection = {
   scale: mapScale,
   liveFocus: false,
   bodyReferenceRangeMeters: Number.POSITIVE_INFINITY,
-}
-
-type AsteroidMapCluster = {
-  id: string
-  contacts: ShipContact[]
-  center: ShipCoordinate
-  label: string
-}
-
-const asteroidClusterRangeMeters = 3000
-
-function createAsteroidMapClusters(contacts: ShipContact[]): AsteroidMapCluster[] {
-  const asteroids = contacts.filter((contact) => contact.kind === 'asteroid')
-  const visited = new Set<string>()
-  const clusters: AsteroidMapCluster[] = []
-
-  asteroids.forEach((asteroid) => {
-    if (visited.has(asteroid.id)) return
-    const group: ShipContact[] = []
-    const queue = [asteroid]
-    visited.add(asteroid.id)
-
-    while (queue.length) {
-      const current = queue.shift()
-      if (!current) continue
-      group.push(current)
-
-      asteroids.forEach((candidate) => {
-        if (visited.has(candidate.id)) return
-        if (distanceMeters(current, candidate) > asteroidClusterRangeMeters) return
-        visited.add(candidate.id)
-        queue.push(candidate)
-      })
-    }
-
-    if (group.length < 2) return
-    const center = group.reduce((total, contact) => ({
-      x: total.x + contact.x / group.length,
-      y: total.y + contact.y / group.length,
-      z: total.z + contact.z / group.length,
-    }), { x: 0, y: 0, z: 0 })
-    const sorted = [...group].sort((left, right) => asteroidShortLabel(left).localeCompare(asteroidShortLabel(right), undefined, { numeric: true }))
-    clusters.push({
-      id: `asteroid-cluster-${sorted.map((contact) => contact.id).join('-')}`,
-      contacts: sorted,
-      center,
-      label: `${asteroidShortLabel(sorted[0])} GROUP x${sorted.length}`,
-    })
-  })
-
-  return clusters
 }
 
 function createSystemMapProjection(
@@ -4274,15 +4223,43 @@ function displayContactPosition(
   )
 }
 
-const planetSkinProfiles: Record<string, { base: string; low: string; high: string; cloud: string; accent: string }> = {
-  'body-helena': { base: '#2f7f65', low: '#183d57', high: '#91d2a4', cloud: '#f1ead9', accent: '#68b4e8' },
-  'body-mourning': { base: '#848c90', low: '#34383c', high: '#c5cdd2', cloud: '#a5adb3', accent: '#d49d72' },
-  'body-ares': { base: '#b45737', low: '#522318', high: '#e29a67', cloud: '#d9b78b', accent: '#7b2d1e' },
-  'body-europa': { base: '#d5d4c2', low: '#7a8f9c', high: '#fff7bd', cloud: '#eef4f4', accent: '#9bc8de' },
-  'body-pelagos': { base: '#1d72a8', low: '#113250', high: '#71d2ff', cloud: '#e4fbff', accent: '#49d9be' },
-  'body-vesper': { base: '#7659a8', low: '#293a5d', high: '#b393ff', cloud: '#d6c9f7', accent: '#5fc17a' },
-  'body-triton': { base: '#6fb9cd', low: '#273d55', high: '#d6fbff', cloud: '#f0feff', accent: '#8e9ef5' },
-  'body-pertam': { base: '#c47a42', low: '#4d2a1c', high: '#ffc071', cloud: '#d8a16b', accent: '#8c5a35' },
+type PlanetEnvironment = 'earthlike' | 'moon' | 'mars' | 'ice' | 'ocean' | 'alien' | 'titan' | 'desert' | 'terrestrial' | 'airless'
+
+type PlanetSkinProfile = {
+  base: string
+  low: string
+  high: string
+  land: string
+  accent: string
+  cloud: string
+}
+
+const planetSkinProfiles: Record<PlanetEnvironment, PlanetSkinProfile> = {
+  earthlike: { base: '#176ca6', low: '#0a3158', high: '#65b9db', land: '#438a45', accent: '#ad8b55', cloud: '#ffffff' },
+  moon: { base: '#85898c', low: '#36393d', high: '#d0d3d3', land: '#72767a', accent: '#ece5d2', cloud: '#aeb3b5' },
+  mars: { base: '#ad4d2d', low: '#4b1e17', high: '#e58a54', land: '#85351f', accent: '#d8b38d', cloud: '#d9aa82' },
+  ice: { base: '#b9dce4', low: '#527d99', high: '#f5ffff', land: '#dceceb', accent: '#76bcd5', cloud: '#ffffff' },
+  ocean: { base: '#125d9a', low: '#082c55', high: '#4bbde4', land: '#32a584', accent: '#a8d26d', cloud: '#f1ffff' },
+  alien: { base: '#263c83', low: '#171743', high: '#6f70d5', land: '#7d4ea4', accent: '#42c893', cloud: '#ddbfff' },
+  titan: { base: '#a9682f', low: '#41261c', high: '#e7ac5d', land: '#7a462a', accent: '#2e302d', cloud: '#edbd79' },
+  desert: { base: '#c37a3d', low: '#59301e', high: '#f1bd71', land: '#9c5630', accent: '#e3d099', cloud: '#d9a572' },
+  terrestrial: { base: '#39736f', low: '#183b42', high: '#86b8a0', land: '#66884d', accent: '#a1885c', cloud: '#edf2e8' },
+  airless: { base: '#747b7e', low: '#292e31', high: '#bdc4c5', land: '#62686b', accent: '#d4c8ad', cloud: '#aab0b2' },
+}
+
+function planetEnvironment(contact: ShipContact): PlanetEnvironment {
+  const description = [contact.generatorName, contact.name, contact.className, contact.notes].join(' ').toLowerCase()
+  if (/earthlike|earth-like|terran|temperate/.test(description)) return 'earthlike'
+  if (/europa|triton|ice|icy|frozen|snow/.test(description)) return 'ice'
+  if (/\bmoon\b|lunar/.test(description)) return 'moon'
+  if (/\bmars\b|\bares\b|martian/.test(description)) return 'mars'
+  if (/\balien\b/.test(description)) return 'alien'
+  if (/pelagos|ocean|water world/.test(description)) return 'ocean'
+  if (/\btitan\b|vesper/.test(description)) return 'titan'
+  if (/pertam|desert|arid|dry world/.test(description)) return 'desert'
+  if (contact.hasAtmosphere === false) return 'airless'
+  if (contact.hasAtmosphere === true) return 'terrestrial'
+  return 'airless'
 }
 
 function hashString(value: string) {
@@ -4304,11 +4281,40 @@ function seededRandom(seed: number) {
 
 const planetTextureCache = new Map<string, THREE.CanvasTexture>()
 
+function drawPlanetBlob(
+  context: CanvasRenderingContext2D,
+  random: () => number,
+  x: number,
+  y: number,
+  radiusX: number,
+  radiusY: number,
+  color: string,
+  alpha = 1,
+) {
+  context.save()
+  context.globalAlpha = alpha
+  context.fillStyle = color
+  context.beginPath()
+  const points = 16
+  for (let index = 0; index <= points; index += 1) {
+    const angle = index / points * Math.PI * 2
+    const wobble = 0.72 + random() * 0.4
+    const pointX = x + Math.cos(angle) * radiusX * wobble
+    const pointY = y + Math.sin(angle) * radiusY * wobble
+    if (index === 0) context.moveTo(pointX, pointY)
+    else context.lineTo(pointX, pointY)
+  }
+  context.closePath()
+  context.fill()
+  context.restore()
+}
+
 function createPlanetTexture(contact: ShipContact) {
-  const cacheKey = `${contact.id}:${contact.color}`
+  const environment = planetEnvironment(contact)
+  const cacheKey = `${contact.id}:${contact.color}:${contact.generatorName || ''}:${contact.hasAtmosphere ?? 'unknown'}:${environment}`
   const cached = planetTextureCache.get(cacheKey)
   if (cached) return cached
-  const profile = planetSkinProfiles[contact.id] ?? { base: contact.color, low: '#1a2527', high: '#d6f3ea', cloud: '#eef5ed', accent: contact.color }
+  const profile = planetSkinProfiles[environment]
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
   canvas.width = 512
@@ -4321,33 +4327,66 @@ function createPlanetTexture(contact: ShipContact) {
     context.fillStyle = gradient
     context.fillRect(0, 0, canvas.width, canvas.height)
 
-    const random = seededRandom(hashString(contact.id))
-    const isMoon = isMoonBody(contact)
-    const bandCount = isMoon ? 14 : 28
-    for (let index = 0; index < bandCount; index += 1) {
-      const y = random() * canvas.height
-      const height = (isMoon ? 2 : 5) + random() * (isMoon ? 6 : 18)
-      const alpha = 0.08 + random() * 0.16
-      context.fillStyle = index % 3 === 0
-        ? hexToRgba(profile.accent, alpha)
-        : hexToRgba(index % 2 === 0 ? profile.high : profile.low, alpha)
-      context.beginPath()
-      for (let x = 0; x <= canvas.width; x += 14) {
-        const wave = Math.sin((x + index * 17) / (32 + random() * 44)) * (4 + random() * 8)
-        if (x === 0) context.moveTo(x, y + wave)
-        else context.lineTo(x, y + wave)
+    const random = seededRandom(hashString(`${contact.id}:${environment}`))
+    const oceanWorld = environment === 'earthlike' || environment === 'ocean' || environment === 'alien'
+    const airless = environment === 'moon' || environment === 'airless'
+    const dryWorld = environment === 'mars' || environment === 'desert' || environment === 'titan'
+
+    if (oceanWorld || environment === 'terrestrial') {
+      const landCount = environment === 'ocean' ? 8 : 18
+      for (let index = 0; index < landCount; index += 1) {
+        const x = random() * canvas.width
+        const y = 28 + random() * (canvas.height - 56)
+        const radiusX = 22 + random() * (environment === 'ocean' ? 44 : 72)
+        const radiusY = 8 + random() * 26
+        for (const wrap of [-canvas.width, 0, canvas.width]) {
+          drawPlanetBlob(context, random, x + wrap, y, radiusX, radiusY, index % 4 === 0 ? profile.accent : profile.land, 0.82 + random() * 0.18)
+        }
       }
-      context.lineTo(canvas.width, y + height)
-      context.lineTo(0, y + height)
-      context.closePath()
-      context.fill()
+      if (environment === 'earthlike') {
+        context.fillStyle = 'rgba(245, 250, 244, 0.88)'
+        context.fillRect(0, 0, canvas.width, 13)
+        context.fillRect(0, canvas.height - 13, canvas.width, 13)
+      }
     }
 
-    const craterCount = isMoon ? 70 : contact.id === 'body-pertam' || contact.id === 'body-ares' ? 38 : 16
+    if (dryWorld) {
+      for (let index = 0; index < 38; index += 1) {
+        drawPlanetBlob(context, random, random() * canvas.width, random() * canvas.height, 16 + random() * 62, 3 + random() * 12, index % 3 === 0 ? profile.accent : profile.land, 0.12 + random() * 0.22)
+      }
+      context.lineWidth = 1.5
+      for (let index = 0; index < 18; index += 1) {
+        const y = random() * canvas.height
+        context.strokeStyle = hexToRgba(profile.high, 0.1 + random() * 0.14)
+        context.beginPath()
+        context.moveTo(0, y)
+        for (let x = 0; x <= canvas.width; x += 20) context.lineTo(x, y + Math.sin((x + index * 31) / 34) * (2 + random() * 5))
+        context.stroke()
+      }
+    }
+
+    if (environment === 'ice') {
+      context.strokeStyle = hexToRgba(profile.accent, 0.42)
+      context.lineWidth = 1.2
+      for (let index = 0; index < 34; index += 1) {
+        let x = random() * canvas.width
+        let y = random() * canvas.height
+        context.beginPath()
+        context.moveTo(x, y)
+        for (let step = 0; step < 5; step += 1) {
+          x += random() * 42 - 21
+          y += 9 + random() * 24
+          context.lineTo(x, y)
+        }
+        context.stroke()
+      }
+    }
+
+    const craterCount = airless ? 78 : dryWorld ? 28 : environment === 'ice' ? 12 : 4
     for (let index = 0; index < craterCount; index += 1) {
       const x = random() * canvas.width
       const y = random() * canvas.height
-      const radius = (isMoon ? 2.2 : 1.6) + random() * (isMoon ? 7 : 5)
+      const radius = (airless ? 2.2 : 1.4) + random() * (airless ? 8 : 4)
       context.fillStyle = hexToRgba(profile.low, 0.18 + random() * 0.2)
       context.beginPath()
       context.ellipse(x, y, radius * (1.2 + random()), radius * 0.72, random() * Math.PI, 0, Math.PI * 2)
@@ -4356,12 +4395,13 @@ function createPlanetTexture(contact: ShipContact) {
       context.stroke()
     }
 
-    if (!isMoon && contact.id !== 'body-pertam') {
-      for (let index = 0; index < 22; index += 1) {
+    const cloudCount = contact.hasAtmosphere === false || airless ? 0 : environment === 'mars' ? 5 : environment === 'titan' ? 12 : 22
+    if (cloudCount) {
+      for (let index = 0; index < cloudCount; index += 1) {
         const x = random() * canvas.width
         const y = random() * canvas.height
-        context.strokeStyle = hexToRgba(profile.cloud, 0.16 + random() * 0.24)
-        context.lineWidth = 2 + random() * 7
+        context.strokeStyle = hexToRgba(profile.cloud, environment === 'titan' ? 0.12 + random() * 0.12 : 0.16 + random() * 0.24)
+        context.lineWidth = 2 + random() * (environment === 'titan' ? 12 : 7)
         context.beginPath()
         context.moveTo(x, y)
         context.bezierCurveTo(
@@ -5350,53 +5390,7 @@ function ShipSystemMap({
       markerGroup.add(disableMapPicking(memoryCloud))
     }
 
-    const asteroidClusters = createAsteroidMapClusters(contacts)
-    const clusteredAsteroidIds = new Set(asteroidClusters.flatMap((cluster) => cluster.contacts.map((contact) => contact.id)))
-
-    asteroidClusters.forEach((cluster) => {
-      const selectedClusterContact = cluster.contacts.find((contact) => contact.id === selectedContactId)
-      const isSelected = Boolean(selectedClusterContact)
-      const contactColor = '#8d9498'
-      const markerPosition = contactPosition(cluster.center, currentPosition, mapProjection.scale)
-      const marker = new THREE.Mesh(
-        new THREE.DodecahedronGeometry(isSelected ? 0.52 : 0.42, 0),
-        new THREE.MeshStandardMaterial({
-          color: contactColor,
-          emissive: contactColor,
-          emissiveIntensity: isSelected ? 0.96 : 0.42,
-          roughness: 0.42,
-        }),
-      )
-      marker.position.copy(markerPosition)
-      marker.userData.contactId = selectedClusterContact?.id ?? cluster.contacts[0].id
-      markerGroup.add(marker)
-
-      const halo = new THREE.Mesh(
-        new THREE.SphereGeometry(isSelected ? 1.25 : 1.05, 16, 16),
-        new THREE.MeshBasicMaterial({ color: contactColor, depthWrite: false, opacity: isSelected ? 0.14 : 0.08, transparent: true }),
-      )
-      disableMapPicking(halo)
-      halo.position.copy(markerPosition)
-      markerGroup.add(halo)
-
-      const label = createBodyLabel(cluster.label, contactColor, isSelected)
-      setMapLabelScale(label, isSelected ? 6.2 : 3.2, isSelected ? 1.52 : 0.78, 0.24, 0.92)
-      label.position.copy(markerPosition)
-      label.position.y += isSelected ? 3.25 : 2.45
-      disableMapPicking(label)
-      markerGroup.add(label)
-
-      const hitArea = new THREE.Mesh(
-        new THREE.SphereGeometry(isSelected ? 1.8 : 1.45, 14, 14),
-        new THREE.MeshBasicMaterial({ color: contactColor, depthWrite: false, opacity: 0, transparent: true }),
-      )
-      hitArea.position.copy(markerPosition)
-      hitArea.userData.contactId = selectedClusterContact?.id ?? cluster.contacts[0].id
-      markerGroup.add(hitArea)
-    })
-
     contacts.forEach((contact) => {
-      if (clusteredAsteroidIds.has(contact.id)) return
       const isSelected = contact.id === selectedContactId || contact.id === focusContactId
       const isHostile = isHostileContact(contact)
       const contactColor = contact.kind === 'gps' ? '#3dff93' : displayColorForContact(contact)
@@ -5467,9 +5461,7 @@ function ShipSystemMap({
 
       if (contact.kind !== 'body' && shouldShowContactLabel(contact, isSelected)) {
         const label = createBodyLabel(mapLabelForContact(contact), contactColor, isSelected)
-        if (contact.kind === 'asteroid') {
-          setMapLabelScale(label, isSelected ? 5.8 : 2.75, isSelected ? 1.42 : 0.68, 0.24, 0.9)
-        } else if (contact.kind === 'gps') {
+        if (contact.kind === 'gps') {
           setMapLabelScale(label, isSelected ? 7.2 : 5.4, isSelected ? 1.78 : 1.34, 0.22, 0.92)
         } else {
           setMapLabelScale(label, isSelected ? 8.8 : 6.6, isSelected ? 2.18 : 1.64, 0.28, 1.04)
@@ -5487,7 +5479,7 @@ function ShipSystemMap({
         : contact.kind === 'custom'
           ? isSelected ? 2.1 : 1.7
           : contact.kind === 'asteroid'
-            ? isSelected ? 1.4 : 1.1
+            ? isSelected ? 1.8 : 1.4
             : isSelected ? 2.4 : 1.8
       const hitArea = new THREE.Mesh(
         new THREE.SphereGeometry(hitRadius, 16, 16),
@@ -9858,7 +9850,6 @@ export function ShipOSPage({
         </div>
         <div className="shipOsTopBarStatus">
           <strong>{lastTelemetryPacket?.ship || "Awaiting game telemetry"}</strong>
-          <small>{stateSyncStatus}</small>
         </div>
       </header>
 
@@ -10037,7 +10028,10 @@ export function ShipOSPage({
         </div>
       </details>}
 
-
+      <aside className="shipOsStorageStatus" role="status" aria-live="polite" aria-atomic="true">
+        <span>Storage</span>
+        <strong>{stateSyncStatus}</strong>
+      </aside>
 
       {personnelFileSelection && (openPersonnelCrewMember || openPersonnelPassenger) && (
         <div className="shipOsModalBackdrop" role="presentation" onMouseDown={closePersonnelFile}>
