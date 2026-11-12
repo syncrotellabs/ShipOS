@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, rm, readdir } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -10,7 +10,12 @@ const packet = (worldId = 'test-world-01', sequence = 1) => ({ worldId, worldNam
 const mission = title => ({ 'shipos-mission': { title, goal: '', startedAt: '' } })
 async function fixture(t) {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'shipos-test-'))
-  const app = await createShipOsServer({ dataDir, port: 0, watchFile: '', networkAddresses: () => ['127.0.0.2'] })
+  const staticDir = path.join(dataDir, 'static')
+  await mkdir(staticDir)
+  await writeFile(path.join(staticDir, 'index.html'), '<!doctype html><title>ShipOS test</title>')
+  await writeFile(path.join(staticDir, 'texture.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]))
+  await writeFile(path.join(staticDir, 'display.woff'), Buffer.from([0x77, 0x4f, 0x46, 0x46]))
+  const app = await createShipOsServer({ dataDir, staticDir, port: 0, watchFile: '', networkAddresses: () => ['127.0.0.2'] })
   let closed = false
   t.after(async () => { if (!closed) await app.close(); const resolved = path.resolve(dataDir); assert.ok(resolved.startsWith(path.resolve(tmpdir()) + path.sep) && path.basename(resolved).startsWith('shipos-test-')); await rm(resolved, { recursive: true, force: true }) })
   const session = await fetch(app.url + '/api/session')
@@ -18,6 +23,16 @@ async function fixture(t) {
   const request = (route, body, overrides = {}) => fetch(app.url + route, { headers: { Cookie: cookie, ...(body === undefined ? {} : { 'Content-Type': 'application/json', 'X-ShipOS-Client': 'local-beta' }), ...overrides.headers }, ...(body === undefined ? {} : { method: 'POST', body: JSON.stringify(body) }), ...Object.fromEntries(Object.entries(overrides).filter(([key]) => key !== 'headers')) })
   return { app, cookie, request, dataDir, close: async () => { await app.close(); closed = true } }
 }
+
+test('static textures and bundled fonts use browser-safe MIME types', async t => {
+  const { app } = await fixture(t)
+  const texture = await fetch(app.url + '/texture.jpg')
+  const font = await fetch(app.url + '/display.woff')
+  assert.equal(texture.status, 200)
+  assert.equal(texture.headers.get('content-type'), 'image/jpeg')
+  assert.equal(texture.headers.get('x-content-type-options'), 'nosniff')
+  assert.equal(font.headers.get('content-type'), 'font/woff')
+})
 
 test('local API requires authentication, explicit mutation headers and a trusted Host/Origin', async t => {
   const { app, request } = await fixture(t)

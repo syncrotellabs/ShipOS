@@ -340,7 +340,7 @@ export async function createShipOsServer(options = {}) {
       if (!filename.startsWith(path.resolve(staticDir) + path.sep) && filename !== path.resolve(staticDir)) throw fail(403, 'Invalid path.')
       if (route === '/') filename = path.join(staticDir, 'index.html')
       if (!existsSync(filename) || !statSync(filename).isFile()) throw fail(404, 'Resource not found. Build ShipOS before starting the standalone server.')
-      const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.json': 'application/json', '.woff2': 'font/woff2' }[path.extname(filename)] || 'application/octet-stream'
+      const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.json': 'application/json', '.woff': 'font/woff', '.woff2': 'font/woff2' }[path.extname(filename).toLowerCase()] || 'application/octet-stream'
       res.writeHead(200, { 'Content-Type': mime, 'Cache-Control': 'no-cache' })
       res.end(req.method === 'HEAD' ? undefined : await readFile(filename))
     } catch (error) {
