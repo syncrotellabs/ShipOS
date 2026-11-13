@@ -30,6 +30,8 @@ test('main pages, first-visit beta notice, configuration drawer, and fragment pa
   assert.match(app, /LOCAL BETA · v/)
   assert.match(app, /Enable LAN & create connection command/)
   assert.match(app, /The QR connects a browser or tablet only/)
+  assert.match(app, /In-game ShipOS displays/)
+  assert.match(app, /Put <code>location<\/code> on the first line/)
 })
 
 test('transient storage messages stay below the map instead of shifting telemetry', async () => {
@@ -130,6 +132,22 @@ test('the local world mod provides an addressed, local-only ShipOS chat bridge',
   assert.match(mod, /ShipOSLocalTelemetry\.chat-request\.txt/)
   assert.match(mod, /ShipOSLocalTelemetry\.chat-reply\.txt/)
   assert.match(mod, /DeleteFileInGlobalStorage\(ChatReplyFileName\)/)
+})
+
+test('the local world mod drives tagged LCD panels from Custom Data commands', async () => {
+  const mod = await read('../public/shipos/addons/shipos-local-telemetry-mod/ShipOSLocalTelemetry/Data/Scripts/ShipOSLocalTelemetry/ShipOSLocalTelemetrySession.cs')
+  const readme = await read('../public/shipos/addons/shipos-local-telemetry-mod/README.md')
+  assert.match(mod, /ModVersion = "2026\.11\.13\.2"/)
+  assert.match(mod, /GetBlocksOfType<IMyTextPanel>/)
+  assert.match(mod, /panel\.CustomName\.IndexOf\(FleetTag, StringComparison\.OrdinalIgnoreCase\)/)
+  assert.match(mod, /FirstCommandLine\(panel\.CustomData\)/)
+  assert.match(mod, /command\.Equals\("location", StringComparison\.OrdinalIgnoreCase\)/)
+  assert.match(mod, /grid == null \? panel\.GetPosition\(\) : grid\.GetPosition\(\)/)
+  assert.match(mod, /ToString\("0\.00", CultureInfo\.InvariantCulture\)/)
+  assert.match(mod, /panel\.ContentType = ContentType\.TEXT_AND_IMAGE/)
+  assert.match(mod, /panel\.WriteText\(output, false\)/)
+  assert.match(readme, /Bridge Navigation \[SHIPOS\]/)
+  assert.match(readme, /first non-empty line of that panel's \*\*Custom Data\*\*/)
 })
 
 test('remote game bridge is authenticated, revocable, and limited to telemetry and chat exchange', async () => {

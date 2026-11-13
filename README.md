@@ -33,7 +33,9 @@ The service listens on loopback by default. Optional sharing binds only the sele
 
 The always-visible **Focus** dropdown lists Player first, then loaded friendly grids with `[ShipOS]` in their grid name. Use e.g. `[ShipOS] Mining Drone` in the game's grid Info tab, not a block/group name. Selection centers the map and displays that grid's readings; **Refocus** recenters after panning. Labels are enlarged with a minimum screen size for readability.
 
-Mod 2026.11.13.1 discovers grids every ten simulation seconds and samples every two. It also publishes the player's saved in-game GPS list as pinned, clickable map contacts. Actual owner/faction relations gate fleet eligibility; neutral/hostile/unowned grids cannot join by adding a tag or editing map IFF. Each separate subgrid needs its own tag. Only loaded grids report, with a nearest-128 beta limit. A lost selection falls back to Player. Detailed grid readings are separate from player telemetry; story/AI context and relative-velocity tables remain player-based. See the bundled mod README for measurement definitions.
+Mod 2026.11.13.2 discovers grids every ten simulation seconds and samples every two. It also publishes the player's saved in-game GPS list as pinned, clickable map contacts. Actual owner/faction relations gate fleet eligibility; neutral/hostile/unowned grids cannot join by adding a tag or editing map IFF. Each separate subgrid needs its own tag. Only loaded grids report, with a nearest-128 beta limit. A lost selection falls back to Player. Detailed grid readings are separate from player telemetry; story/AI context and relative-velocity tables remain player-based. See the bundled mod README for measurement definitions.
+
+Owned or faction-friendly LCD text panels with `[SHIPOS]` in their panel name can read a command from Custom Data. Set the first line to `location` to display that panel's grid-origin XYZ coordinates, rounded to two decimal places and refreshed every two seconds. No programmable block is required.
 
 ## Local data and AI
 
@@ -45,7 +47,7 @@ AI is optional. Ollama may run on the gaming PC or another computer on the same 
 
 ## In-game ShipOS comms
 
-The bundled mod and local helper can exchange text through two bounded files in Space Engineers global storage. Enable **In-game ShipOS comms** in Configuration after selecting an Ollama model, reload the world with mod `2026.11.13.1` or newer, then type `/shipos status`, `/shipos <message>`, or `@ShipOS <message>` in game. Addressed commands are kept out of normal player chat. ShipOS supplies a small current-telemetry summary to Ollama and returns a plain-text reply under the `ShipOS` chat name.
+The bundled mod and local helper can exchange text through two bounded files in Space Engineers global storage. Enable **In-game ShipOS comms** in Configuration after selecting an Ollama model, reload the world with mod `2026.11.13.2` or newer, then type `/shipos status`, `/shipos <message>`, or `@ShipOS <message>` in game. Addressed commands are kept out of normal player chat. ShipOS supplies a small current-telemetry summary to Ollama and returns a plain-text reply under the `ShipOS` chat name.
 
 Proactive telemetry remarks are off by default and can be limited to at most once every 10, 20, or 30 minutes. The model may return `SILENT` when nothing merits an interruption. This local channel writes chat text only: it cannot steer, trigger blocks, move inventory, edit saves, or accept commands through the hosted relay.
 

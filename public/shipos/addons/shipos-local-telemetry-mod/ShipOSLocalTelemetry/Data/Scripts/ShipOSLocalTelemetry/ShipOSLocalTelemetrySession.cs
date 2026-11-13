@@ -7,6 +7,7 @@ using System.IO;
 using System.Text;
 using VRage.Game;
 using VRage.Game.Components;
+using VRage.Game.GUI.TextPanel;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRageMath;
@@ -19,7 +20,7 @@ namespace ShipOSLocalTelemetry
         private const string OutputFileName = "ShipOSLocalTelemetry.latest.json";
         private const string ChatRequestFileName = "ShipOSLocalTelemetry.chat-request.txt";
         private const string ChatReplyFileName = "ShipOSLocalTelemetry.chat-reply.txt";
-        private const string ModVersion = "2026.11.13.1";
+        private const string ModVersion = "2026.11.13.2";
         private const string FleetTag = "[ShipOS]";
         private const int MaxFleetGrids = 128;
         private const string WorldIdentityFile = "ShipOS.world-id.txt";
@@ -50,6 +51,8 @@ namespace ShipOSLocalTelemetry
         private string _cachedContactsJson = "[]";
         private readonly List<IHitInfo> _terrainHits = new List<IHitInfo>(12);
         private readonly HashSet<IMyEntity> _fleetCandidates = new HashSet<IMyEntity>();
+        private readonly List<IMyTextPanel> _shipOsTextPanels = new List<IMyTextPanel>();
+        private readonly HashSet<long> _updatedTextPanelIds = new HashSet<long>();
 
         public override void BeforeStart()
         {
@@ -259,6 +262,7 @@ namespace ShipOSLocalTelemetry
             AppendTerrainScan(packet, controller, position);
             if (subject is IMyCubeGrid) AppendGridSystems(packet, (IMyCubeGrid)subject);
             AppendFleetTelemetry(packet, position);
+            UpdateShipOsTextPanels();
             packet.Append(",\"contacts\":");
             if (_sequence == 1 || _sequence % ContactScanPacketInterval == 0)
             {
@@ -384,6 +388,83 @@ namespace ShipOSLocalTelemetry
                 packet.Append('}');
             }
             packet.Append(']');
+        }
+
+        private void UpdateShipOsTextPanels()
+        {
+            if (MyAPIGateway.TerminalActionsHelper == null) return;
+            _updatedTextPanelIds.Clear();
+
+            foreach (IMyEntity entity in _fleetCandidates)
+            {
+                IMyCubeGrid grid = entity as IMyCubeGrid;
+                if (grid == null || grid.Closed || grid.MarkedForClose) continue;
+                string relationship = GridRelationship(grid);
+                if (relationship != "owned" && relationship != "friendly") continue;
+
+                try
+                {
+                    IMyGridTerminalSystem terminalSystem = MyAPIGateway.TerminalActionsHelper.GetTerminalSystemForGrid(grid);
+                    if (terminalSystem == null) continue;
+                    _shipOsTextPanels.Clear();
+                    terminalSystem.GetBlocksOfType<IMyTextPanel>(_shipOsTextPanels, panel =>
+                        panel != null
+                        && !string.IsNullOrWhiteSpace(panel.CustomName)
+                        && panel.CustomName.IndexOf(FleetTag, StringComparison.OrdinalIgnoreCase) >= 0);
+
+                    for (int index = 0; index < _shipOsTextPanels.Count; index++)
+                    {
+                        IMyTextPanel panel = _shipOsTextPanels[index];
+                        if (panel == null || panel.Closed || panel.MarkedForClose || !_updatedTextPanelIds.Add(panel.EntityId)) continue;
+                        IMyCubeGrid panelGrid = panel.CubeGrid as IMyCubeGrid;
+                        string panelRelationship = GridRelationship(panelGrid);
+                        if (panelRelationship != "owned" && panelRelationship != "friendly") continue;
+                        UpdateShipOsTextPanel(panel, panelGrid);
+                    }
+                }
+                catch
+                {
+                    // A grid can split, merge, or unload while its terminal system is being scanned.
+                }
+            }
+        }
+
+        private static void UpdateShipOsTextPanel(IMyTextPanel panel, IMyCubeGrid grid)
+        {
+            string command = FirstCommandLine(panel.CustomData);
+            string output;
+            if (command.Equals("location", StringComparison.OrdinalIgnoreCase))
+            {
+                Vector3D position = grid == null ? panel.GetPosition() : grid.GetPosition();
+                output = "[SHIPOS]\nLOCATION\n\n"
+                    + "X: " + position.X.ToString("0.00", CultureInfo.InvariantCulture) + " m\n"
+                    + "Y: " + position.Y.ToString("0.00", CultureInfo.InvariantCulture) + " m\n"
+                    + "Z: " + position.Z.ToString("0.00", CultureInfo.InvariantCulture) + " m";
+            }
+            else if (string.IsNullOrEmpty(command))
+            {
+                output = "[SHIPOS]\nNO COMMAND\n\nSet Custom Data to:\nlocation";
+            }
+            else
+            {
+                string safeCommand = command.Length > 80 ? command.Substring(0, 80) + "…" : command;
+                output = "[SHIPOS]\nUNKNOWN COMMAND\n\n" + safeCommand + "\n\nAvailable:\nlocation";
+            }
+
+            if (panel.ContentType != ContentType.TEXT_AND_IMAGE) panel.ContentType = ContentType.TEXT_AND_IMAGE;
+            if (!string.Equals(panel.GetText(), output, StringComparison.Ordinal)) panel.WriteText(output, false);
+        }
+
+        private static string FirstCommandLine(string customData)
+        {
+            if (string.IsNullOrWhiteSpace(customData)) return string.Empty;
+            string[] lines = customData.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int index = 0; index < lines.Length; index++)
+            {
+                string line = lines[index].Trim();
+                if (line.Length > 0) return line;
+            }
+            return string.Empty;
         }
 
         private static void AppendGridSystems(StringBuilder packet, IMyCubeGrid grid)
