@@ -9,9 +9,13 @@ type Status = {
   telemetry: { connected: boolean; stamp: string | null; error: string; stableWorldIdentity: boolean; watchFile?: string }
   sharing: { enabled: boolean; url: string | null; address: string | null; addresses?: string[] }
   ai: { enabled: boolean; model: string; host: string }
+  gameChat: { enabled: boolean; proactiveMinutes: number; available: boolean; lastRequestAt: string | null; lastReplyAt: string | null; nextProactiveAt: string | number | null; error: string }
+  gameBridge: { connected: boolean; deviceId: string | null }
   relay: { enabled: boolean; configured: boolean; connected: boolean; url: string; lastSuccessAt: string | null; error: string }
 }
 type Device = { id: string; label: string; role: 'editor' }
+type BridgeDevice = { id: string; label: string; createdAt: string; lastSeenAt: string | null }
+type NewBridge = BridgeDevice & { token: string; bridgeUrl: string }
 let bootPromise: Promise<{ session: LocalSession; world: WorldState }> | undefined
 function boot() {
   return bootPromise ??= (async () => {
@@ -65,24 +69,37 @@ function LocalSettings({ session, status, refresh }: { session: LocalSession; st
   const [pairUrl, setPairUrl] = useState('')
   const [expires, setExpires] = useState(0)
   const [devices, setDevices] = useState<Device[]>([])
+  const [bridgeDevices, setBridgeDevices] = useState<BridgeDevice[]>([])
+  const [bridgeLabel, setBridgeLabel] = useState('Space Engineers PC')
+  const [newBridge, setNewBridge] = useState<NewBridge | null>(null)
   const [model, setModel] = useState(status?.ai.model || '')
   const [aiHost, setAiHost] = useState(status?.ai.host || '127.0.0.1')
+  const [gameChatEnabled, setGameChatEnabled] = useState(Boolean(status?.gameChat.enabled))
+  const [proactiveMinutes, setProactiveMinutes] = useState(status?.gameChat.proactiveMinutes || 0)
   const [relayToken, setRelayToken] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [resetText, setResetText] = useState('')
   const [now, setNow] = useState(Date.now())
   const admin = session.role === 'admin'
+  const refreshAdminDevices = async () => {
+    const [paired, bridges] = await Promise.all([
+      localApi<Device[]>('/api/admin/devices'),
+      localApi<BridgeDevice[]>('/api/admin/bridge-devices'),
+    ])
+    setDevices(paired); setBridgeDevices(bridges)
+  }
   useEffect(() => {
-    if (admin) void localApi<Device[]>('/api/admin/devices').then(setDevices).catch(() => undefined)
+    if (admin) void refreshAdminDevices().catch(() => undefined)
     const timer = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(timer)
   }, [admin])
   useEffect(() => { setModel(status?.ai.model || '') }, [status?.ai.model])
   useEffect(() => { setAiHost(status?.ai.host || '127.0.0.1') }, [status?.ai.host])
+  useEffect(() => { setGameChatEnabled(Boolean(status?.gameChat.enabled)); setProactiveMinutes(status?.gameChat.proactiveMinutes || 0) }, [status?.gameChat.enabled, status?.gameChat.proactiveMinutes])
   const act = async (fn: () => Promise<void>) => {
     setBusy(true); setMessage('')
-    try { await fn(); await refresh(); if (admin) setDevices(await localApi<Device[]>('/api/admin/devices')) }
+    try { await fn(); await refresh(); if (admin) await refreshAdminDevices() }
     catch (error) { setMessage((error as Error).message) }
     finally { setBusy(false) }
   }
@@ -107,6 +124,30 @@ function LocalSettings({ session, status, refresh }: { session: LocalSession; st
       <label>Installed Ollama model name<input value={model} onChange={event => setModel(event.target.value)} placeholder="Exact model name installed on the AI computer" maxLength={160} /></label>
       <div className="betaActions"><button disabled={busy || !model.trim() || !aiHost.trim()} onClick={() => void act(async () => { await localApi('/api/admin/ai', { model: model.trim(), host: aiHost.trim(), enabled: true }); setMessage('Private-network AI enabled. Switch to Storytelling to use it.'); window.dispatchEvent(new Event('shipos:ai-settings')) })}>Enable AI computer</button><button disabled={busy} onClick={() => void act(async () => { await localApi('/api/admin/ai', { model: model.trim(), host: aiHost.trim() || '127.0.0.1', enabled: false }); window.dispatchEvent(new Event('shipos:ai-settings')) })}>Disable AI</button></div>
       <p className="betaMuted">Remote prompts travel as unencrypted HTTP inside your LAN. Restrict Ollama and TCP 11434 to the trusted Private network—never port-forward it.</p>
+    </section>
+    <section className="betaSettingsSection"><h3>Remote gaming-PC bridge</h3>
+      <p>Run Space Engineers on another Windows computer while ShipOS and Ollama stay here. The bundled collector sends telemetry to this app and carries ShipOS chat replies back to the game over your trusted private network.</p>
+      <p><strong>The bridge can exchange telemetry and local ShipOS chat text only.</strong> Its key does not grant story, settings, block control, inventory, save, or hosted-relay access.</p>
+      <label>Gaming PC label<input value={bridgeLabel} onChange={event => setBridgeLabel(event.target.value)} maxLength={80} placeholder="Space Engineers PC" /></label>
+      <div className="betaActions"><button disabled={busy || !status?.sharing.enabled || !bridgeLabel.trim()} onClick={() => void act(async () => {
+        const created = await localApi<NewBridge>('/api/admin/bridge-devices', { label: bridgeLabel.trim() })
+        setNewBridge(created); setMessage('Game-PC bridge created. Copy the command now; the key will not be shown again.')
+      })}>Create game-PC bridge</button></div>
+      {!status?.sharing.enabled && <p className="betaMuted">Enable local sharing above before creating a bridge.</p>}
+      {newBridge && <div className="betaQr"><p><strong>Copy this now — the bridge key is shown once.</strong> Run from the cloned ShipOS repository on the Windows gaming PC with Node.js 24:</p><label>PowerShell command<textarea readOnly rows={4} value={`node .\\runtime\\game-bridge.mjs --url "${newBridge.bridgeUrl}" --token "${newBridge.token}"`} onFocus={event => event.currentTarget.select()} /></label><button disabled={busy} onClick={() => void navigator.clipboard.writeText(`node .\\runtime\\game-bridge.mjs --url "${newBridge.bridgeUrl}" --token "${newBridge.token}"`).then(() => setMessage('Gaming-PC bridge command copied.')).catch(() => setMessage('Automatic copy was blocked. Select the command above and copy it manually.'))}>Copy bridge command</button><p className="betaMuted">Treat this key like a password. This LAN link uses HTTP; never port-forward TCP 5174.</p></div>}
+      <p className="betaMuted">Status: {status?.gameBridge.connected ? 'Gaming PC connected' : 'Waiting for gaming PC'}.</p>
+      {bridgeDevices.map(device => <div className="betaDevice" key={device.id}><span>{device.label}</span><b>{device.id === status?.gameBridge.deviceId && status.gameBridge.connected ? 'Connected' : device.lastSeenAt ? `Last seen ${new Date(device.lastSeenAt).toLocaleString()}` : 'Never connected'}</b><button onClick={() => void act(async () => { await localApi('/api/admin/bridge-devices', { id: device.id, revoke: true }); if (newBridge?.id === device.id) setNewBridge(null) })}>Revoke</button></div>)}
+    </section>
+    <section className="betaSettingsSection"><h3>In-game ShipOS comms</h3>
+      <p>Opt in to a local chat bridge between the bundled Space Engineers mod and your configured Ollama model. In game, type <code>/shipos status</code>, <code>/shipos &lt;message&gt;</code>, or <code>@ShipOS &lt;message&gt;</code>. Replies appear as ShipOS chat messages.</p>
+      <p><strong>This channel can read the current telemetry context and write text into local game chat only.</strong> It cannot steer, trigger blocks, move inventory, edit the save, or receive commands through the hosted relay.</p>
+      <label>Proactive telemetry updates<select value={proactiveMinutes} onChange={event => setProactiveMinutes(Number(event.target.value))}><option value={0}>Off — reply only</option><option value={10}>At most every 10 minutes</option><option value={20}>At most every 20 minutes</option><option value={30}>At most every 30 minutes</option></select></label>
+      <div className="betaActions"><button disabled={busy || !status?.ai.enabled || !status?.gameChat.available} onClick={() => void act(async () => {
+        await localApi('/api/admin/game-chat', { enabled: true, proactiveMinutes }); setGameChatEnabled(true); setMessage('In-game ShipOS comms enabled. Reload the world after installing this mod update, then type /shipos status in game.')
+      })}>{gameChatEnabled ? 'Update in-game comms' : 'Enable in-game comms'}</button><button disabled={busy || !gameChatEnabled} onClick={() => void act(async () => {
+        await localApi('/api/admin/game-chat', { enabled: false, proactiveMinutes: 0 }); setGameChatEnabled(false); setMessage('In-game ShipOS comms disabled.')
+      })}>Disable in-game comms</button></div>
+      <p className="betaMuted">Status: {gameChatEnabled ? 'Enabled' : 'Off'}{status?.gameChat.error ? ` · ${status.gameChat.error}` : ''}{status?.gameChat.lastReplyAt ? ` · last reply ${new Date(status.gameChat.lastReplyAt).toLocaleString()}` : ''}.</p>
     </section>
     <section className="betaSettingsSection"><h3>Optional Echoboard telemetry relay</h3>
       <p>Send live Space Engineers telemetry to <code>shipos.echoboardhq.com</code> over outbound HTTPS so a WordPress-authenticated browser on another computer can view it. No inbound port or home-network forwarding is required.</p>

@@ -17,11 +17,16 @@ namespace ShipOSLocalTelemetry
     public class ShipOSLocalTelemetrySession : MySessionComponentBase
     {
         private const string OutputFileName = "ShipOSLocalTelemetry.latest.json";
-        private const string ModVersion = "2026.11.12.1";
+        private const string ChatRequestFileName = "ShipOSLocalTelemetry.chat-request.txt";
+        private const string ChatReplyFileName = "ShipOSLocalTelemetry.chat-reply.txt";
+        private const string ModVersion = "2026.11.13.1";
         private const string FleetTag = "[ShipOS]";
         private const int MaxFleetGrids = 128;
         private const string WorldIdentityFile = "ShipOS.world-id.txt";
         private const int TickInterval = 120;
+        private const int ChatPollTickInterval = 30;
+        private const int MaxChatRequestLength = 500;
+        private const int MaxChatReplyLength = 800;
         private const int ContactScanPacketInterval = 5;
         private const double ContactRangeMeters = 250000.0;
         private const int MaxContacts = 80;
@@ -32,20 +37,184 @@ namespace ShipOSLocalTelemetry
         private static readonly double[] TerrainLateralFactors = { -1.0, -0.5, 0.0, 0.5, 1.0 };
 
         private int _ticks;
+        private int _chatTicks;
+        private int _chatSequence;
         private int _sequence;
         private bool _announced;
+        private bool _chatSubscribed;
         private readonly string _sessionId = Guid.NewGuid().ToString("N");
         private string _worldId;
+        private string _pendingChatRequestId = string.Empty;
+        private string _lastChatReplyId = string.Empty;
+        private DateTime _chatPendingUntil = DateTime.MinValue;
         private string _cachedContactsJson = "[]";
         private readonly List<IHitInfo> _terrainHits = new List<IHitInfo>(12);
         private readonly HashSet<IMyEntity> _fleetCandidates = new HashSet<IMyEntity>();
 
+        public override void BeforeStart()
+        {
+            if (MyAPIGateway.Utilities == null || _chatSubscribed) return;
+            MyAPIGateway.Utilities.MessageEnteredSender += OnMessageEntered;
+            _chatSubscribed = true;
+        }
+
+        protected override void UnloadData()
+        {
+            if (_chatSubscribed && MyAPIGateway.Utilities != null)
+                MyAPIGateway.Utilities.MessageEnteredSender -= OnMessageEntered;
+            _chatSubscribed = false;
+        }
+
         public override void UpdateAfterSimulation()
         {
+            _chatTicks++;
+            if (_chatTicks >= ChatPollTickInterval)
+            {
+                _chatTicks = 0;
+                ReadChatReply();
+            }
             _ticks++;
             if (_ticks < TickInterval) return;
             _ticks = 0;
             WriteTelemetryPacket();
+        }
+
+        private void OnMessageEntered(ulong sender, string messageText, ref bool sendToOthers)
+        {
+            string request;
+            if (!TryExtractShipOsMessage(messageText, out request)) return;
+            sendToOthers = false;
+
+            if (string.IsNullOrWhiteSpace(request))
+            {
+                MyAPIGateway.Utilities.ShowMessage("ShipOS", "Use /shipos status or /shipos <message>. @ShipOS also works.");
+                return;
+            }
+            if (request.Length > MaxChatRequestLength)
+            {
+                MyAPIGateway.Utilities.ShowMessage("ShipOS", "That request is too long. Keep it under 500 characters.");
+                return;
+            }
+            if (!string.IsNullOrEmpty(_pendingChatRequestId) && DateTime.UtcNow < _chatPendingUntil)
+            {
+                MyAPIGateway.Utilities.ShowMessage("ShipOS", "Still working on your previous request.");
+                return;
+            }
+
+            try
+            {
+                if (_worldId == null) _worldId = ReadOrCreateWorldIdentity();
+                _chatSequence++;
+                string requestId = "shipos-chat-" + _sessionId + "-" + _chatSequence.ToString(CultureInfo.InvariantCulture);
+                string player = MyAPIGateway.Session != null && MyAPIGateway.Session.Player != null
+                    ? MyAPIGateway.Session.Player.DisplayName
+                    : sender.ToString(CultureInfo.InvariantCulture);
+                using (TextWriter writer = MyAPIGateway.Utilities.WriteFileInGlobalStorage(ChatRequestFileName))
+                {
+                    writer.WriteLine("version=1");
+                    writer.WriteLine("session=" + _sessionId);
+                    writer.WriteLine("world=" + (_worldId ?? string.Empty));
+                    writer.WriteLine("request=" + requestId);
+                    writer.WriteLine("stamp=" + DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+                    writer.WriteLine("player=" + EncodeChatValue(player));
+                    writer.WriteLine("message=" + EncodeChatValue(request));
+                }
+                _pendingChatRequestId = requestId;
+                _chatPendingUntil = DateTime.UtcNow.AddMinutes(2);
+                MyAPIGateway.Utilities.ShowMessage("ShipOS", "Request received. Stand by…");
+            }
+            catch
+            {
+                MyAPIGateway.Utilities.ShowMessage("ShipOS", "Could not reach the local ShipOS helper.");
+            }
+        }
+
+        private static bool TryExtractShipOsMessage(string messageText, out string request)
+        {
+            request = string.Empty;
+            if (string.IsNullOrWhiteSpace(messageText)) return false;
+            string trimmed = messageText.Trim();
+            const string slashPrefix = "/shipos";
+            const string mentionPrefix = "@shipos";
+            string prefix = trimmed.StartsWith(slashPrefix, StringComparison.OrdinalIgnoreCase)
+                ? slashPrefix
+                : trimmed.StartsWith(mentionPrefix, StringComparison.OrdinalIgnoreCase) ? mentionPrefix : string.Empty;
+            if (string.IsNullOrEmpty(prefix)) return false;
+            if (trimmed.Length > prefix.Length && !char.IsWhiteSpace(trimmed[prefix.Length])) return false;
+            request = trimmed.Length == prefix.Length ? string.Empty : trimmed.Substring(prefix.Length).Trim();
+            return true;
+        }
+
+        private static string EncodeChatValue(string value)
+        {
+            return Convert.ToBase64String(Encoding.UTF8.GetBytes(value ?? string.Empty));
+        }
+
+        private void ReadChatReply()
+        {
+            if (MyAPIGateway.Utilities == null || !MyAPIGateway.Utilities.FileExistsInGlobalStorage(ChatReplyFileName)) return;
+            try
+            {
+                Dictionary<string, string> fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                using (TextReader reader = MyAPIGateway.Utilities.ReadFileInGlobalStorage(ChatReplyFileName))
+                {
+                    string line;
+                    while ((line = reader.ReadLine()) != null)
+                    {
+                        int separator = line.IndexOf('=');
+                        if (separator > 0) fields[line.Substring(0, separator)] = line.Substring(separator + 1);
+                    }
+                }
+
+                string version, session, replyId, expiresText, encodedMessage;
+                if (!fields.TryGetValue("version", out version) || version != "1"
+                    || !fields.TryGetValue("session", out session) || session != _sessionId
+                    || !fields.TryGetValue("reply", out replyId) || string.IsNullOrWhiteSpace(replyId)
+                    || !fields.TryGetValue("expires", out expiresText)
+                    || !fields.TryGetValue("message", out encodedMessage))
+                {
+                    MyAPIGateway.Utilities.DeleteFileInGlobalStorage(ChatReplyFileName);
+                    return;
+                }
+
+                DateTime expires;
+                if (!DateTime.TryParse(expiresText, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out expires)
+                    || expires.ToUniversalTime() < DateTime.UtcNow
+                    || replyId == _lastChatReplyId)
+                {
+                    MyAPIGateway.Utilities.DeleteFileInGlobalStorage(ChatReplyFileName);
+                    return;
+                }
+
+                string message = Encoding.UTF8.GetString(Convert.FromBase64String(encodedMessage)).Trim();
+                if (message.Length > MaxChatReplyLength) message = message.Substring(0, MaxChatReplyLength).TrimEnd() + "…";
+                _lastChatReplyId = replyId;
+                if (replyId == _pendingChatRequestId)
+                {
+                    _pendingChatRequestId = string.Empty;
+                    _chatPendingUntil = DateTime.MinValue;
+                }
+                MyAPIGateway.Utilities.DeleteFileInGlobalStorage(ChatReplyFileName);
+                ShowChatReply(message);
+            }
+            catch
+            {
+                // The helper may be replacing the file while this tick reads it. Retry on the next poll.
+            }
+        }
+
+        private static void ShowChatReply(string message)
+        {
+            string remaining = (message ?? string.Empty).Replace('\r', ' ').Replace('\n', ' ').Trim();
+            if (remaining.Length == 0) return;
+            while (remaining.Length > 240)
+            {
+                int split = remaining.LastIndexOf(' ', 240);
+                if (split < 80) split = 240;
+                MyAPIGateway.Utilities.ShowMessage("ShipOS", remaining.Substring(0, split).Trim());
+                remaining = remaining.Substring(split).TrimStart();
+            }
+            if (remaining.Length > 0) MyAPIGateway.Utilities.ShowMessage("ShipOS", remaining);
         }
 
         private void WriteTelemetryPacket()

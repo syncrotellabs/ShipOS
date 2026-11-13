@@ -1,6 +1,6 @@
 # ShipOS local telemetry mod
 
-The supported beta telemetry source is a local world mod; no plugin loader, cloud service, or programmable block is required.
+The supported beta telemetry source is a local world mod; no plugin loader, cloud service, or programmable block is required. Mod `2026.11.13.1` also adds an opt-in, local-only ShipOS chat bridge.
 
 It reads the controlled character or cockpit and writes `Storage/ShipOSLocalTelemetry.latest.json` in Space Engineers' application-data folder every two simulation seconds. Nearby contact scans run every ten simulation seconds. All loaded planets are reported with their game identity and real center/radius.
 
@@ -8,7 +8,21 @@ Character and cockpit telemetry include position, velocity, gravity, orientation
 
 The mod stores `ShipOS.world-id.txt` in world storage to keep separate stories across saves. Save the world after first use. A copied save also copies this identity; remove that file from the copied world's ShipOS storage before loading it if you want an independent story.
 
-## Tagged friendly fleet (mod 2026.11.12.1)
+## In-game ShipOS comms (mod 2026.11.13.1)
+
+After configuring Ollama and enabling **In-game ShipOS comms** in the local app, use one of these addressed commands:
+
+- `/shipos status`
+- `/shipos <message>`
+- `@ShipOS <message>`
+
+The mod suppresses the addressed command from ordinary player chat and writes one bounded request to `Storage/ShipOSLocalTelemetry.chat-request.txt`. The local helper combines it with a concise current-telemetry context, calls the configured Ollama computer, and writes a short-lived response to `Storage/ShipOSLocalTelemetry.chat-reply.txt`. The mod displays that response under the `ShipOS` chat name and deletes the reply file. Session and world IDs prevent a reply from an old game session from being replayed.
+
+Optional proactive telemetry remarks are off by default and are rate-limited in the app. This bridge exchanges text only. It has no block actions, terminal control, inventory mutation, steering, save editing, internet listener, or hosted-relay command path.
+
+When Space Engineers and ShipOS run on different computers, `runtime/game-bridge.mjs` watches these same storage files on the Windows gaming PC and exchanges telemetry/chat with an authenticated, revocable private-LAN endpoint on the ShipOS computer. See `docs/REMOTE_GAME_BRIDGE.md` in the repository.
+
+## Tagged friendly fleet (mod 2026.11.13.1)
 
 Add `[ShipOS]` anywhere in a **grid name** (Info tab), e.g. `[ShipOS] Mining Drone`. The tag is case-insensitive; naming a block, antenna, or group does not opt in a grid. Every separate grid/subgrid needs its own name tag.
 

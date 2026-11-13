@@ -12,9 +12,11 @@ The Space Engineers world mod writes its latest telemetry packet under the curre
 
 Sharing is off by default. If the player enables it, ShipOS serves the selected private network address over unencrypted HTTP. Paired devices can view telemetry and read/write the shared Storytelling workspace. Administrative settings remain restricted to the gaming PC. Pair only devices and people you trust, and revoke devices you no longer use.
 
+If Space Engineers runs on a second computer, the player can separately create a revocable gaming-PC bridge key. The collector on that computer sends live telemetry and addressed ShipOS chat text to the selected private ShipOS address and receives bounded chat replies. ShipOS stores the key's SHA-256 hash; the raw key is displayed once and remains visible to the user who runs the copied command. This LAN bridge does not send data to syncrotellabs.
+
 ## Optional AI
 
-AI is disabled by default. If the player configures Ollama on this PC or another private-LAN computer, ShipOS sends the requested story prompt and relevant local context to that computer over unencrypted HTTP. ShipOS accepts only loopback or a private IPv4 address and never sends these prompts to syncrotellabs. Restrict the Ollama firewall rule to the trusted Private network—preferably to the gaming PC's source address—and never port-forward port `11434`. The privacy behavior of the separately installed Ollama service is controlled by that software, not ShipOS.
+AI is disabled by default. If the player configures Ollama on this PC or another private-LAN computer, ShipOS sends the requested story prompt and relevant local context to that computer over unencrypted HTTP. If the player separately enables in-game ShipOS comms, addressed `/shipos` or `@ShipOS` chat text and a concise current-telemetry context are also sent to that Ollama computer; optional proactive requests use the same path and are off by default. ShipOS accepts only loopback or a private IPv4 address and never sends these prompts to syncrotellabs. Restrict the Ollama firewall rule to the trusted Private network—preferably to the gaming PC's source address—and never port-forward port `11434`. The privacy behavior of the separately installed Ollama service is controlled by that software, not ShipOS.
 
 ## Optional hosted telemetry
 

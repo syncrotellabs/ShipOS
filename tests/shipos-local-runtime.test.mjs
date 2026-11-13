@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, rm, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 import { request as httpRequest } from 'node:http'
 import { createShipOsServer, validatePacket, validateState } from '../runtime/server.mjs'
+import { parseArguments, parseEnvelope, runGameBridge, serializeEnvelope, validateBridgeUrl } from '../runtime/game-bridge.mjs'
 
 const packet = (worldId = 'test-world-01', sequence = 1) => ({ worldId, worldName: 'Star System test', x: 1, y: 2, z: 3, sessionId: 'session-one', stamp: new Date().toISOString(), sequence, contacts: [] })
 const mission = title => ({ 'shipos-mission': { title, goal: '', startedAt: '' } })
@@ -144,6 +145,124 @@ test('AI is optional and restricted to loopback or private-LAN Ollama hosts', as
   assert.equal((await request('/api/admin/ai', { model: 'test-model:small', host: '192.168.42.20', enabled: true })).status, 200)
   const models = await (await request('/api/ai/models')).json()
   assert.equal(models[0].providerName, 'LAN 192.168.42.20')
+})
+
+test('opt-in in-game chat bridges a current mod session to Ollama and returns a bounded reply', async t => {
+  const storage = await mkdtemp(path.join(tmpdir(), 'shipos-chat-test-'))
+  t.after(async () => { await rm(storage, { recursive: true, force: true }) })
+  const chatRequestFile = path.join(storage, 'ShipOSLocalTelemetry.chat-request.txt')
+  const chatReplyFile = path.join(storage, 'ShipOSLocalTelemetry.chat-reply.txt')
+  let ollamaRequest = null
+  const aiFetch = async (url, options) => {
+    ollamaRequest = { url, body: JSON.parse(options.body) }
+    return new Response(JSON.stringify({ choices: [{ message: { content: 'Battery is at 42%. All other reported systems are nominal.' } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  }
+  const { app, request } = await fixture(t, { chatRequestFile, chatReplyFile, aiFetch })
+  assert.equal((await request('/api/admin/game-chat', { enabled: true, proactiveMinutes: 5 })).status, 400)
+  assert.equal((await request('/api/admin/ai', { model: 'shipos-test:latest', host: '127.0.0.1', enabled: true })).status, 200)
+  assert.equal((await request('/api/admin/game-chat', { enabled: true, proactiveMinutes: 10 })).status, 200)
+
+  const worldId = 'a'.repeat(32)
+  const sessionId = 'b'.repeat(32)
+  app.ingest({ ...packet(worldId), sessionId, batteryPercent: 42 })
+  const requestId = `shipos-chat-${sessionId}-1`
+  await writeFile(chatRequestFile, [
+    'version=1',
+    `session=${sessionId}`,
+    `world=${worldId}`,
+    `request=${requestId}`,
+    `stamp=${new Date().toISOString()}`,
+    `player=${Buffer.from('Engineer').toString('base64')}`,
+    `message=${Buffer.from('Give me a status report.').toString('base64')}`,
+    '',
+  ].join('\n'))
+
+  assert.equal(await app.processGameChat(), true)
+  assert.equal(ollamaRequest.url, 'http://127.0.0.1:11434/v1/chat/completions')
+  assert.equal(ollamaRequest.body.reasoning_effort, 'none')
+  assert.equal(ollamaRequest.body.temperature, 0.2)
+  assert.match(ollamaRequest.body.messages[1].content, /"batteryPercent":42/)
+  assert.match(ollamaRequest.body.messages[1].content, /Battery: 42%/)
+  assert.match(ollamaRequest.body.messages[0].content, /Never invent sensor readings/)
+  const reply = Object.fromEntries((await readFile(chatReplyFile, 'utf8')).trim().split(/\r?\n/).map(line => {
+    const separator = line.indexOf('=')
+    return [line.slice(0, separator), line.slice(separator + 1)]
+  }))
+  assert.equal(reply.session, sessionId)
+  assert.equal(reply.reply, requestId)
+  assert.equal(Buffer.from(reply.message, 'base64').toString('utf8'), 'Battery is at 42%. All other reported systems are nominal.')
+  assert.equal(app.status().gameChat.enabled, true)
+  assert.ok(app.status().gameChat.lastReplyAt)
+})
+
+test('authenticated gaming-PC collector carries telemetry and ShipOS chat both ways across the private LAN', async t => {
+  const storage = await mkdtemp(path.join(tmpdir(), 'shipos-game-bridge-test-'))
+  t.after(async () => { await rm(storage, { recursive: true, force: true }) })
+  const aiFetch = async () => new Response(JSON.stringify({ choices: [{ message: { content: 'Battery is exactly 64%. You are moving at 8 m/s.' } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+  const { app, request } = await fixture(t, { aiFetch })
+  await request('/api/admin/sharing', { enabled: true, address: '127.0.0.2' })
+  await request('/api/admin/ai', { model: 'shipos-test:latest', host: '127.0.0.1', enabled: true })
+  await request('/api/admin/game-chat', { enabled: true, proactiveMinutes: 0 })
+  const createdResponse = await request('/api/admin/bridge-devices', { label: 'Test gaming PC' })
+  assert.equal(createdResponse.status, 201)
+  const bridge = await createdResponse.json()
+  assert.match(bridge.token, /^shipos_bridge_[A-Za-z0-9_-]{43}$/)
+  assert.equal(bridge.bridgeUrl, `${app.status().sharing.url}api/bridge/exchange`)
+  const listed = await (await request('/api/admin/bridge-devices')).json()
+  assert.equal(listed[0].label, 'Test gaming PC')
+  assert.equal('token' in listed[0], false)
+
+  const worldId = 'c'.repeat(32)
+  const sessionId = 'd'.repeat(32)
+  const requestId = `shipos-chat-${sessionId}-1`
+  await writeFile(path.join(storage, 'ShipOSLocalTelemetry.latest.json'), JSON.stringify({ ...packet(worldId), sessionId, batteryPercent: 64, speed: 8 }))
+  await writeFile(path.join(storage, 'ShipOSLocalTelemetry.chat-request.txt'), [
+    'version=1',
+    `session=${sessionId}`,
+    `world=${worldId}`,
+    `request=${requestId}`,
+    `stamp=${new Date().toISOString()}`,
+    `player=${Buffer.from('Engineer').toString('base64')}`,
+    `message=${Buffer.from('Status please.').toString('base64')}`,
+    '',
+  ].join('\n'))
+
+  const controller = new AbortController()
+  const errors = []
+  const collector = runGameBridge({ url: bridge.bridgeUrl, token: bridge.token, storageDir: storage }, { intervalMs: 10, signal: controller.signal, log: () => {}, error: message => errors.push(message) })
+  for (let attempt = 0; attempt < 100 && !app.status().gameBridge.connected; attempt++) await new Promise(resolve => setTimeout(resolve, 10))
+  assert.equal(app.status().gameBridge.connected, true)
+  await app.processBridgeGameChat()
+  let replySource = ''
+  for (let attempt = 0; attempt < 100 && !replySource; attempt++) {
+    try { replySource = await readFile(path.join(storage, 'ShipOSLocalTelemetry.chat-reply.txt'), 'utf8') } catch (error) { if (error.code !== 'ENOENT') throw error }
+    if (!replySource) await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  controller.abort()
+  await collector
+  assert.deepEqual(errors, [])
+  const reply = parseEnvelope(replySource)
+  assert.equal(reply.session, sessionId)
+  assert.equal(reply.reply, requestId)
+  assert.equal(Buffer.from(reply.message, 'base64').toString('utf8'), 'Battery is exactly 64%. You are moving at 8 m/s.')
+  assert.equal((await (await request('/api/telemetry/latest')).json()).batteryPercent, 64)
+
+  assert.equal((await fetch(bridge.bridgeUrl, { method: 'POST', headers: { Authorization: `Bearer ${bridge.token}`, 'Content-Type': 'application/json' }, body: '{}' })).status, 403)
+  await request('/api/admin/bridge-devices', { id: bridge.id, revoke: true })
+  assert.equal((await fetch(bridge.bridgeUrl, { method: 'POST', headers: { Authorization: `Bearer ${bridge.token}`, 'Content-Type': 'application/json', 'X-ShipOS-Bridge': 'v1' }, body: '{}' })).status, 401)
+})
+
+test('gaming-PC collector rejects public endpoints and preserves the line protocol', () => {
+  const url = 'http://192.168.42.3:5174/api/bridge/exchange'
+  const token = `shipos_bridge_${'a'.repeat(43)}`
+  assert.equal(validateBridgeUrl(url), url)
+  assert.throws(() => validateBridgeUrl('https://192.168.42.3:5174/api/bridge/exchange'))
+  assert.throws(() => validateBridgeUrl('http://8.8.8.8:5174/api/bridge/exchange'))
+  assert.throws(() => validateBridgeUrl('http://user:pass@192.168.42.3:5174/api/bridge/exchange'))
+  const config = parseArguments(['--url', url, '--token', token, '--appdata', path.resolve('/tmp/appdata')], {})
+  assert.equal(config.token, token)
+  const envelope = { version: '1', session: 'abc', reply: 'request-1', expires: new Date().toISOString(), message: Buffer.from('hello').toString('base64') }
+  assert.deepEqual(parseEnvelope(serializeEnvelope(envelope)), envelope)
 })
 
 test('optional hosted telemetry relay is outbound-only, authenticated, and forgets its key when disabled', async t => {

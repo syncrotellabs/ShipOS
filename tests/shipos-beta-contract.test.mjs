@@ -66,6 +66,7 @@ test('public beta package carries requirements, privacy, support, release notes,
   assert.match(build, /RELEASE-MANIFEST\.json/)
   assert.match(build, /codeSigned = \$false/)
   assert.match(build, /channel = 'public-beta'/)
+  assert.match(build, /game-bridge\.mjs/)
 })
 
 test('automatic save setup backs up and idempotently enables the local telemetry mod', async () => {
@@ -79,7 +80,7 @@ test('automatic save setup backs up and idempotently enables the local telemetry
     await writeFile(join(data, 'auto-configure-saves'), 'enabled')
     await writeFile(join(world, 'Sandbox_config.sbc'), '<?xml version="1.0"?><MyObjectBuilder_WorldConfiguration>\r\n  <Mods>\r\n  </Mods>\r\n</MyObjectBuilder_WorldConfiguration>\r\n')
     await writeFile(join(world, 'Sandbox.sbc'), '<?xml version="1.0"?><MyObjectBuilder_Checkpoint>\r\n  <Mods>\r\n  </Mods>\r\n</MyObjectBuilder_Checkpoint>\r\n')
-    const powershell = join(process.env.WINDIR || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
+    const powershell = process.platform === 'win32' ? join(process.env.WINDIR || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe') : 'pwsh'
     const script = fileURLToPath(new URL('../runtime/configure-saves.ps1', import.meta.url))
     const run = () => spawnSync(powershell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script, '-SaveRoot', saves, '-DataRoot', data, '-IgnoreGameProcess'], { encoding: 'utf8' })
     const first = run()
@@ -101,4 +102,29 @@ test('automatic save setup backs up and idempotently enables the local telemetry
   } finally {
     await rm(root, { recursive: true, force: true })
   }
+})
+
+test('the local world mod provides an addressed, local-only ShipOS chat bridge', async () => {
+  const mod = await read('../public/shipos/addons/shipos-local-telemetry-mod/ShipOSLocalTelemetry/Data/Scripts/ShipOSLocalTelemetry/ShipOSLocalTelemetrySession.cs')
+  assert.match(mod, /MessageEnteredSender \+= OnMessageEntered/)
+  assert.match(mod, /sendToOthers = false/)
+  assert.match(mod, /\/shipos/)
+  assert.match(mod, /@shipos/)
+  assert.match(mod, /ShipOSLocalTelemetry\.chat-request\.txt/)
+  assert.match(mod, /ShipOSLocalTelemetry\.chat-reply\.txt/)
+  assert.match(mod, /DeleteFileInGlobalStorage\(ChatReplyFileName\)/)
+})
+
+test('remote game bridge is authenticated, revocable, and limited to telemetry and chat exchange', async () => {
+  const server = await read('../runtime/server.mjs')
+  const collector = await read('../runtime/game-bridge.mjs')
+  const app = await read('../src/LocalApp.tsx')
+  assert.match(server, /\/api\/bridge\/exchange/)
+  assert.match(server, /shipos_bridge_/)
+  assert.match(server, /bridge_devices/)
+  assert.match(collector, /X-ShipOS-Bridge': 'v1'/)
+  assert.match(collector, /SpaceEngineers', 'Storage'/)
+  assert.match(collector, /private-LAN HTTP/)
+  assert.match(app, /Remote gaming-PC bridge/)
+  assert.match(app, /key is shown once/)
 })

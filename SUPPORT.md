@@ -28,6 +28,12 @@ ShipOS stops the edit instead of silently overwriting a newer revision. Download
 
 On the AI computer, confirm Ollama is running with `OLLAMA_HOST=0.0.0.0:11434`, the requested model is installed, and the operating-system firewall allows TCP `11434` only from the trusted Private network or gaming PC. From the gaming PC, run `Invoke-RestMethod http://AI-COMPUTER-IP:11434/api/tags` in PowerShell. Use that numeric private IPv4 address and the exact installed model name in ShipOS Configuration. Do not use a public IP, hostname, port-forward, or public Wi-Fi. See [Remote Ollama setup](docs/REMOTE_OLLAMA.md).
 
+## `/shipos` does not answer in game
+
+Confirm that the save loaded mod `2026.11.13.1` or newer, Ollama is enabled in Configuration, and **In-game ShipOS comms** is enabled. Exit and reload the world after updating the mod. Control a character or cockpit until ShipOS shows live telemetry, then try `/shipos status`. The request and reply files are `%APPDATA%\SpaceEngineers\Storage\ShipOSLocalTelemetry.chat-request.txt` and `ShipOSLocalTelemetry.chat-reply.txt`. The Configuration status reports the last bridge error without exposing chat text.
+
+When the game is on a second computer, also confirm that **Remote gaming-PC bridge** says connected and its collector window is still running. A `401` means that key was revoked or copied incorrectly; create a new bridge entry. A connection failure usually means the ShipOS address changed, local sharing was turned off, client isolation is enabled, or TCP `5174` is blocked. See [Remote Space Engineers game bridge](docs/REMOTE_GAME_BRIDGE.md).
+
 ## Uninstall
 
 Use **Start > ShipOS > Uninstall ShipOS** or Windows Installed apps. Uninstall removes the active app, helper, and shortcuts. It intentionally retains stories, backups, logs, the telemetry mod, and rollback copies.

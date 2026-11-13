@@ -2,7 +2,7 @@
 
 A free, MIT-licensed companion for Space Engineers. **Telemetry** provides a live planetary map and concise readings; **Storytelling** keeps optional AI, campaigns, crew, contracts, finances, chronicle, communications, portraits, and ship records in a separate RP workspace.
 
-No subscription, paid tier, cloud AI, or game-control channel. ShipOS is local-first; an optional, explicitly enabled HTTPS telemetry relay lets the player view the gaming PC from the WordPress-authenticated hosted site. Storytelling is experimental fiction, not observed game state.
+No subscription, paid tier, cloud AI, or ship-control channel. ShipOS is local-first; an optional, explicitly enabled local comms bridge can exchange addressed chat with the bundled game mod, while an optional HTTPS telemetry relay lets the player view the gaming PC from the WordPress-authenticated hosted site. Storytelling is experimental fiction, not observed game state.
 
 The optional hosted build uses Echoboard HQ WordPress as its identity provider: members are read-only and WordPress administrators can edit hosted records and issue revocable telemetry-upload keys. It never receives WordPress passwords. Relay keys can upload telemetry only; they cannot read records or control the game. See [Hosted ShipOS deployment](docs/HOSTED_DEPLOYMENT.md).
 
@@ -33,7 +33,7 @@ The service listens on loopback by default. Optional sharing binds only the sele
 
 The always-visible **Focus** dropdown lists Player first, then loaded friendly grids with `[ShipOS]` in their grid name. Use e.g. `[ShipOS] Mining Drone` in the game's grid Info tab, not a block/group name. Selection centers the map and displays that grid's readings; **Refocus** recenters after panning. Labels are enlarged with a minimum screen size for readability.
 
-Mod 2026.11.12.1 discovers grids every ten simulation seconds and samples every two. It also publishes the player's saved in-game GPS list as pinned, clickable map contacts. Actual owner/faction relations gate fleet eligibility; neutral/hostile/unowned grids cannot join by adding a tag or editing map IFF. Each separate subgrid needs its own tag. Only loaded grids report, with a nearest-128 beta limit. A lost selection falls back to Player. Detailed grid readings are separate from player telemetry; story/AI context and relative-velocity tables remain player-based. See the bundled mod README for measurement definitions.
+Mod 2026.11.13.1 discovers grids every ten simulation seconds and samples every two. It also publishes the player's saved in-game GPS list as pinned, clickable map contacts. Actual owner/faction relations gate fleet eligibility; neutral/hostile/unowned grids cannot join by adding a tag or editing map IFF. Each separate subgrid needs its own tag. Only loaded grids report, with a nearest-128 beta limit. A lost selection falls back to Player. Detailed grid readings are separate from player telemetry; story/AI context and relative-velocity tables remain player-based. See the bundled mod README for measurement definitions.
 
 ## Local data and AI
 
@@ -41,7 +41,15 @@ The service watches `%APPDATA%\SpaceEngineers\Storage\ShipOSLocalTelemetry.lates
 
 Shared story edits use optimistic revisions: conflicts stop editing and preserve a recoverable browser draft instead of silently overwriting another console. Reset/restore makes a snapshot first. The newest 30 snapshots are kept. Original pre-beta browser records are not modified or automatically imported.
 
-AI is optional. Ollama may run on the gaming PC or another computer on the same trusted private LAN. ShipOS accepts only `127.0.0.1` or a private IPv4 address and uses the fixed endpoint `http://<AI-PC>:11434/v1/chat/completions`; public hosts and arbitrary URLs are rejected. ShipOS does not install Ollama, download a model, or contact a cloud AI provider. Prompts send context to the configured Ollama computer only when requested. Generated replies are suggestions; the player decides canon. See [Remote Ollama setup](docs/REMOTE_OLLAMA.md) to leave only ShipOS and Space Engineers on the gaming PC.
+AI is optional. Ollama may run on the gaming PC or another computer on the same trusted private LAN. ShipOS accepts only `127.0.0.1` or a private IPv4 address and uses the fixed endpoint `http://<AI-PC>:11434/v1/chat/completions`; public hosts and arbitrary URLs are rejected. ShipOS does not install Ollama, download a model, or contact a cloud AI provider. Prompts send context to the configured Ollama computer only when requested or when the player explicitly enables scheduled in-game telemetry updates. Generated replies are suggestions; the player decides canon. See [Remote Ollama setup](docs/REMOTE_OLLAMA.md) to leave only ShipOS and Space Engineers on the gaming PC.
+
+## In-game ShipOS comms
+
+The bundled mod and local helper can exchange text through two bounded files in Space Engineers global storage. Enable **In-game ShipOS comms** in Configuration after selecting an Ollama model, reload the world with mod `2026.11.13.1` or newer, then type `/shipos status`, `/shipos <message>`, or `@ShipOS <message>` in game. Addressed commands are kept out of normal player chat. ShipOS supplies a small current-telemetry summary to Ollama and returns a plain-text reply under the `ShipOS` chat name.
+
+Proactive telemetry remarks are off by default and can be limited to at most once every 10, 20, or 30 minutes. The model may return `SILENT` when nothing merits an interruption. This local channel writes chat text only: it cannot steer, trigger blocks, move inventory, edit saves, or accept commands through the hosted relay.
+
+Space Engineers may run on a second Windows computer. Enable local sharing on the ShipOS computer, create a revocable key under **Remote gaming-PC bridge**, and run `runtime/game-bridge.mjs` from a clone on the gaming computer. The authenticated collector carries telemetry and chat replies across the private LAN; it uses no npm dependencies and does not expose Ollama or the game. See [Remote Space Engineers game bridge](docs/REMOTE_GAME_BRIDGE.md).
 
 ## Optional hosted telemetry relay
 

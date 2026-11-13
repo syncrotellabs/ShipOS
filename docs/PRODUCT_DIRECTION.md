@@ -1,6 +1,6 @@
 # Product direction — local-first beta
 
-ShipOS is free, open-source MIT donationware. No subscriptions, paid tiers, cloud AI, or remote game-control service. Local operation remains the default; an optional WordPress-authenticated Echoboard site can receive an explicitly enabled, upload-only telemetry relay.
+ShipOS is free, open-source MIT donationware. No subscriptions, paid tiers, cloud AI, or remote game-control service. Local operation remains the default; an opt-in local text bridge can answer addressed in-game chat, and an optional WordPress-authenticated Echoboard site can receive an explicitly enabled, upload-only telemetry relay.
 
 Scope: one locally running single-player Space Engineers game on Windows. The gaming PC owns the SQLite database and serves paired local tablets.
 

@@ -12,6 +12,7 @@ Release date: 2026-09-16
 - Environment-aware planetary rendering with credited low-resolution NASA imagery for Earthlike, Moon, Mars, icy and Venus-like bodies; unmatched fictional worlds retain procedural textures.
 - The Rajdhani display family used by syncrotellabs.com is bundled locally for the ShipOS interface.
 - Optional Ollama can run on the gaming PC or a separate trusted-LAN computer; AI targets are restricted to loopback or private IPv4 addresses on port 11434.
+- Opt-in in-game ShipOS comms accept addressed `/shipos` and `@ShipOS` chat, ground Ollama replies in a bounded telemetry summary, and return text under the ShipOS chat name. Proactive remarks are off by default and rate-limited when enabled. A dependency-free collector can carry telemetry and replies between a separate Windows gaming PC and ShipOS using one-time-visible, hashed, revocable LAN credentials. The bridge cannot control blocks, ships, inventory, or saves.
 - Advanced offline setup retains the concrete Windows, PowerShell, .NET, game-folder, and disk-space readiness report.
 - Copyable setup diagnostics and official Microsoft help links. Setup still performs no automatic downloads or firewall changes.
 - Start-menu launch and uninstall entries, compact installed uninstaller, rollback-preserving upgrades, and retained local data.
