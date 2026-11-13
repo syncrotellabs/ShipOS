@@ -318,6 +318,13 @@
   border-top: 0;
 }
 
+.shipOsNavigationExperience .shipOsMapDeck {
+  --shipos-ui-font-size: var(--shipos-ui-base-font-size);
+  --shipos-ui-font-body: var(--shipos-ui-base-font-body);
+  --shipos-ui-font-small: var(--shipos-ui-base-font-small);
+  --shipos-ui-font-heading: var(--shipos-ui-base-font-heading);
+}
+
 .shipOsTopBar button {
   min-height: 30px;
   padding: 0 10px;

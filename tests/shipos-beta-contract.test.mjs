@@ -40,6 +40,20 @@ test('transient storage messages stay below the map instead of shifting telemetr
   assert.doesNotMatch(localApp, /className="betaStatus">[\s\S]{0,240}\{sync\}/)
 })
 
+test('telemetry chrome keeps focus and readings compact while enlarging non-map text', async () => {
+  const app = await read('../src/LocalApp.tsx')
+  const page = await read('../src/ShipOSPage.tsx')
+  const pageCss = await read('../src/ShipOSPage.css')
+  const betaCss = await read('../src/beta.css')
+  assert.match(app, /<span className="betaBrandMeta"><small>LOCAL BETA · v/)
+  assert.match(app, /<small>\{worldLabel\}<\/small>/)
+  assert.match(page, /\{!isNavigationExperience && <header className="shipOsTopBar">/)
+  assert.match(page, /className="betaTelemetryCommandBar" aria-label="Telemetry focus and readings"/)
+  assert.match(page, /const pageFontScale = isNavigationExperience \? 1\.4 : 1/)
+  assert.match(betaCss, /\.betaTelemetryCommandBar \{ display: flex;[\s\S]*overflow-x: auto;/)
+  assert.match(pageCss, /\.shipOsNavigationExperience \.shipOsMapDeck \{[\s\S]*--shipos-ui-font-size: var\(--shipos-ui-base-font-size\);/)
+})
+
 test('native installer is a guided offline setup and includes start and uninstall entries', async () => {
   const setup = await read('../installer/Setup.cs')
   for (const step of ['Install ShipOS', 'Readiness check', 'Choose components', 'Ready to install', 'ShipOS is installed']) assert.match(setup, new RegExp(step))

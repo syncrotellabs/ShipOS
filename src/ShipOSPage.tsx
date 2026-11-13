@@ -5956,11 +5956,19 @@ export function ShipOSPage({
 
   const displayFontSize = Math.min(18, Math.max(10, Number(displayPreferences.fontSize) || defaultShipOsDisplayPreferences.fontSize))
   const displayFontFace = shipOsFontFaceOptions.find((option) => option.id === displayPreferences.fontFace) ?? shipOsFontFaceOptions[0]
+  const pageFontScale = isNavigationExperience ? 1.4 : 1
+  const baseBodyFontSize = Math.max(9, displayFontSize - 1)
+  const baseSmallFontSize = Math.max(8, displayFontSize - 2)
+  const baseHeadingFontSize = displayFontSize + 5
   const shipOsDisplayStyle = {
-    '--shipos-ui-font-size': `${displayFontSize}px`,
-    '--shipos-ui-font-body': `${Math.max(9, displayFontSize - 1)}px`,
-    '--shipos-ui-font-small': `${Math.max(8, displayFontSize - 2)}px`,
-    '--shipos-ui-font-heading': `${displayFontSize + 5}px`,
+    '--shipos-ui-base-font-size': `${displayFontSize}px`,
+    '--shipos-ui-base-font-body': `${baseBodyFontSize}px`,
+    '--shipos-ui-base-font-small': `${baseSmallFontSize}px`,
+    '--shipos-ui-base-font-heading': `${baseHeadingFontSize}px`,
+    '--shipos-ui-font-size': `${displayFontSize * pageFontScale}px`,
+    '--shipos-ui-font-body': `${baseBodyFontSize * pageFontScale}px`,
+    '--shipos-ui-font-small': `${baseSmallFontSize * pageFontScale}px`,
+    '--shipos-ui-font-heading': `${baseHeadingFontSize * pageFontScale}px`,
     '--shipos-ui-font-family': displayFontFace.family,
   } as CSSProperties
 
@@ -9912,18 +9920,26 @@ export function ShipOSPage({
         </div>
         </div>
       </details></>)
+  const telemetryFocusControls = <>
+    <label htmlFor="telemetry-focus">Focus<select id="telemetry-focus" value={focusedGrid?.id ?? currentShipContactId} onChange={event => refocusTelemetry(event.target.value)}>
+      <option value={currentShipContactId}>Player{lastTelemetryPacket?.controlMode === 'character' ? ' — on foot' : lastTelemetryPacket?.grid ? ` — ${lastTelemetryPacket.grid}` : ''}</option>
+      {fleet.map(grid => <option key={grid.id} value={grid.id}>{fleetLabel(grid)}</option>)}
+    </select></label>
+    <button type="button" className="betaPrimary" onClick={() => refocusTelemetry()} disabled={!lastTelemetryPacket}>Refocus</button>
+    <span>{fleet.length} tagged friendly {fleet.length === 1 ? 'grid' : 'grids'} · <code>[ShipOS]</code></span>
+  </>
   return (
     <main className={`shipOsFullPage${isNavigationExperience ? ' shipOsNavigationExperience' : ''}`} style={shipOsDisplayStyle}>
-      <header className="shipOsTopBar">
+      {!isNavigationExperience && <header className="shipOsTopBar">
         <div>
           <span>Local single-player beta</span>
-          <h1>{isNavigationExperience ? 'Telemetry' : 'Storytelling'}</h1>
-<p>{isNavigationExperience ? "Your game, at a glance. Last-known readings are marked when stale." : "Experimental RP workspace. Everything here is your fiction, not a game action."}</p>
+          <h1>Storytelling</h1>
+          <p>Experimental RP workspace. Everything here is your fiction, not a game action.</p>
         </div>
         <div className="shipOsTopBarStatus">
           <strong>{lastTelemetryPacket?.ship || "Awaiting game telemetry"}</strong>
         </div>
-      </header>
+      </header>}
 
       {!isNavigationExperience && <nav className="shipOsTabs" aria-label="ShipOS tabs">
         {shipTabGroups.map((group) => (
@@ -9940,25 +9956,20 @@ export function ShipOSPage({
         ))}
       </nav>}
 
-      <section className="betaFocusBar" aria-label="Telemetry focus">
-        <label htmlFor="telemetry-focus">Focus<select id="telemetry-focus" value={focusedGrid?.id ?? currentShipContactId} onChange={event => refocusTelemetry(event.target.value)}>
-          <option value={currentShipContactId}>Player{lastTelemetryPacket?.controlMode === 'character' ? ' — on foot' : lastTelemetryPacket?.grid ? ` — ${lastTelemetryPacket.grid}` : ''}</option>
-          {fleet.map(grid => <option key={grid.id} value={grid.id}>{fleetLabel(grid)}</option>)}
-        </select></label>
-        <button type="button" className="betaPrimary" onClick={() => refocusTelemetry()} disabled={!lastTelemetryPacket}>Refocus</button>
-        <span>{fleet.length} tagged friendly {fleet.length === 1 ? 'grid' : 'grids'} · <code>[ShipOS]</code></span>
-      </section>
+      {isNavigationExperience ? <section className="betaTelemetryCommandBar" aria-label="Telemetry focus and readings">
+        <div className="betaTelemetryFocus">{telemetryFocusControls}</div>
+        <dl className="betaTelemetryStrip" aria-label={`Readings for ${focusedGrid?.name || 'Player'}`}>
+          <div><dt>Packet</dt><dd>{telemetryPacketAgeLabel(displayTelemetry?.stamp)}</dd></div>
+          <div><dt>Speed</dt><dd>{formatMetersPerSecond(displayTelemetry?.speed)}</dd></div>
+          <div><dt>Altitude AGL</dt><dd>{formatAltitude(displayTelemetry?.surfaceAltitude)}</dd></div>
+          <div><dt>Vertical</dt><dd>{formatSignedSpeed(displayTelemetry?.verticalSpeed)}</dd></div>
+          <div><dt>Gravity</dt><dd>{Number.isFinite(displayTelemetry?.naturalGravity) ? Number(displayTelemetry?.naturalGravity).toFixed(2) + ' g' : 'Unknown'}</dd></div>
+          <div><dt>Contacts</dt><dd>{lastTelemetryPacket ? visibleContacts.length : '—'}</dd></div>
+        </dl>
+      </section> : <section className="betaFocusBar" aria-label="Telemetry focus">{telemetryFocusControls}</section>}
       {focusNotice && <p role="status" className="betaNotice">{focusNotice}</p>}
       {lastTelemetryPacket && !lastTelemetryPacket.fleet && <p className="betaMuted">Fleet telemetry needs the updated local mod. Save and reload your world after installing it.</p>}
       {Number(lastTelemetryPacket?.fleetEligibleCount) > fleet.length && <p className="betaNotice">Showing the nearest {fleet.length} of {lastTelemetryPacket?.fleetEligibleCount} eligible grids (beta limit: 128).</p>}
-      {isNavigationExperience && <dl className="betaTelemetryStrip" aria-label={`Readings for ${focusedGrid?.name || 'Player'}`}>
-        <div><dt>Packet</dt><dd>{telemetryPacketAgeLabel(displayTelemetry?.stamp)}</dd></div>
-        <div><dt>Speed</dt><dd>{formatMetersPerSecond(displayTelemetry?.speed)}</dd></div>
-        <div><dt>Altitude AGL</dt><dd>{formatAltitude(displayTelemetry?.surfaceAltitude)}</dd></div>
-        <div><dt>Vertical</dt><dd>{formatSignedSpeed(displayTelemetry?.verticalSpeed)}</dd></div>
-        <div><dt>Gravity</dt><dd>{Number.isFinite(displayTelemetry?.naturalGravity) ? Number(displayTelemetry?.naturalGravity).toFixed(2) + ' g' : 'Unknown'}</dd></div>
-        <div><dt>Contacts</dt><dd>{lastTelemetryPacket ? visibleContacts.length : '—'}</dd></div>
-      </dl>}
       {focusedGrid && <dl className="betaFleetReadings" aria-label="Selected grid systems">
         <div><dt>Battery</dt><dd>{Number.isFinite(focusedGrid.batteryPercent) ? focusedGrid.batteryPercent!.toFixed(1) + '%' : 'Not reported'}</dd></div>
         <div><dt>Cargo containers</dt><dd>{Number.isFinite(focusedGrid.cargoPercent) ? focusedGrid.cargoPercent!.toFixed(1) + '%' : 'Not reported'}</dd></div>

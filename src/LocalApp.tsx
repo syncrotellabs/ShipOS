@@ -209,16 +209,17 @@ export function App() {
     const timer = window.setInterval(() => { if (!cancelled) void refresh().catch(() => setStatus(current => current ? { ...current, telemetry: { ...current.telemetry, connected: false } } : current)) }, 3000)
     return () => { cancelled = true; window.clearInterval(timer) }
   }, [])
+  const worldLabel = status?.worldName || ready?.world.name || 'Star System — awaiting world identity'
   return <>
-    <header className="betaHeader"><a href="/" className="betaBrand" aria-label={`ShipOS local beta version ${status?.version || fallbackVersion}`}>SHIP<span>OS</span><small>LOCAL BETA · v{status?.version || fallbackVersion}</small></a><nav aria-label="Main pages"><button aria-current={page === 'telemetry' ? 'page' : undefined} onClick={() => setPage('telemetry')}>Telemetry</button><button aria-current={page === 'story' ? 'page' : undefined} onClick={() => setPage('story')}>Storytelling <small>RP beta</small></button></nav><span className={`betaConnection ${status?.telemetry.connected ? 'live' : ''}`}>{status?.telemetry.connected ? 'Game connected' : 'Waiting / stale'}</span></header>
+    <header className={`betaHeader${page === 'telemetry' ? ' telemetry' : ''}`}><a href="/" className="betaBrand" aria-label={`ShipOS local beta version ${status?.version || fallbackVersion}; ${worldLabel}`}>SHIP<span className="betaBrandAccent">OS</span><span className="betaBrandMeta"><small>LOCAL BETA · v{status?.version || fallbackVersion}</small><small>{worldLabel}</small></span></a><nav aria-label="Main pages"><button aria-current={page === 'telemetry' ? 'page' : undefined} onClick={() => setPage('telemetry')}>Telemetry</button><button aria-current={page === 'story' ? 'page' : undefined} onClick={() => setPage('story')}>Storytelling <small>RP beta</small></button></nav><span className={`betaConnection ${status?.telemetry.connected ? 'live' : ''}`}>{status?.telemetry.connected ? 'Game connected' : 'Waiting / stale'}</span></header>
     {ready ? <>
-      <div className="betaStatus"><span>{status?.worldName || ready.world.name}</span><span>{ready.session.role === 'editor' ? 'Paired play screen' : 'ShipOS host console'}</span></div>
-      {(!status?.telemetry.stableWorldIdentity || status.worldId !== ready.world.worldId) && <p className="betaNotice">{status?.worldId !== ready.world.worldId && status ? 'World changed. Reload to open its separate records.' : 'Waiting for stable world identity. Enable the bundled telemetry mod and reload your world. Until then, records belong to an unassigned local profile.'}</p>}
+      {page === 'story' && <div className="betaStatus"><span>{worldLabel}</span><span>{ready.session.role === 'editor' ? 'Paired play screen' : 'ShipOS host console'}</span></div>}
+      {(!status?.telemetry.stableWorldIdentity || status.worldId !== ready.world.worldId) && <p className={`betaNotice${page === 'telemetry' ? ' telemetry' : ''}`}>{status?.worldId !== ready.world.worldId && status ? 'World changed. Reload to open its separate records.' : 'Waiting for stable world identity. Enable the bundled telemetry mod and reload your world. Until then, records belong to an unassigned local profile.'}</p>}
       {page === 'story' && <MissionStart viewer={false} />}
       <ShipOSPage readOnly={false} worldId={ready.world.worldId} experience={page === 'telemetry' ? 'navigation' : 'console'}
         configuration={<LocalSettings session={ready.session} status={status} refresh={refresh} />} />
     </> : <section className="betaMission"><h1>{error ? 'Let’s reconnect ShipOS' : 'Opening your local console…'}</h1><p>{error || 'Connecting to the helper on the ShipOS host.'}</p>{error && <><p>On a tablet, generate a fresh pairing QR on the ShipOS host. On that computer, launch ShipOS from its shortcut.</p><button onClick={() => window.location.reload()}>Retry</button></>}</section>}
-    <footer className="betaFooter">Free & open source · MIT · No subscriptions · Local-first with optional secure telemetry relay</footer>
+    <footer className={`betaFooter${page === 'telemetry' ? ' telemetry' : ''}`}>Free & open source · MIT · No subscriptions · Local-first with optional secure telemetry relay</footer>
     <BetaNotice />
   </>
 }
