@@ -16,6 +16,10 @@ type Status = {
 type Device = { id: string; label: string; role: 'editor' }
 type BridgeDevice = { id: string; label: string; createdAt: string; lastSeenAt: string | null }
 type NewBridge = BridgeDevice & { token: string; bridgeUrl: string }
+const fallbackVersion = '0.2.0-beta.5'
+const gamePcSetupCommand = `git clone https://github.com/syncrotellabs/ShipOS.git
+cd ShipOS
+& .\\public\\shipos\\addons\\shipos-local-telemetry-mod\\install-shipos-local-telemetry-mod.cmd`
 let bootPromise: Promise<{ session: LocalSession; world: WorldState }> | undefined
 function boot() {
   return bootPromise ??= (async () => {
@@ -103,10 +107,12 @@ function LocalSettings({ session, status, refresh }: { session: LocalSession; st
     catch (error) { setMessage((error as Error).message) }
     finally { setBusy(false) }
   }
-  if (!admin) return <section className="betaSettingsSection"><h3>Paired play screen</h3><p>Story read/write is enabled automatically. There is no account or login; changes are saved on the gaming PC. Sharing, backups, device revocation, and AI configuration stay on the PC.</p></section>
+  const selectedAddress = address || status?.sharing.address || status?.sharing.addresses?.[0] || ''
+  if (!admin) return <section className="betaSettingsSection"><h3>Paired play screen</h3><p>Story read/write is enabled automatically. There is no account or login; changes are saved on the ShipOS host. Sharing, backups, device revocation, and AI configuration stay on that computer.</p></section>
   return <div className="betaSettings">
     <section className="betaSettingsSection"><h3>iPad & local-network sharing</h3>
       <p>Use only a trusted home network. This beta uses local HTTP, not encrypted HTTPS. Never forward its port to the internet.</p>
+      <p><strong>The QR connects a browser or tablet only. It does not connect Space Engineers.</strong> Use the Remote gaming-PC bridge below for the game.</p>
       <label>PC network address<select value={address || status?.sharing.address || status?.sharing.addresses?.[0] || ''} onChange={event => setAddress(event.target.value)}>{status?.sharing.addresses?.map(ip => <option key={ip}>{ip}</option>)}</select></label>
       <div className="betaActions"><button disabled={busy || !status?.sharing.addresses?.length} onClick={() => void act(async () => {
         await localApi('/api/admin/sharing', { enabled: !status?.sharing.enabled, address: address || status?.sharing.address || status?.sharing.addresses?.[0] }); setQr(''); setPairUrl('')
@@ -119,7 +125,7 @@ function LocalSettings({ session, status, refresh }: { session: LocalSession; st
       <p className="betaMuted">If Safari cannot connect, check Windows Firewall and Wi-Fi client isolation. Allow ShipOS only on a trusted private network. No public-network rule is installed automatically.</p>
       {devices.map(device => <div className="betaDevice" key={device.id}><span>{device.label}</span><b>Story read + write</b><button onClick={() => void act(async () => { await localApi('/api/admin/devices', { id: device.id, revoke: true }) })}>Revoke</button></div>)}
     </section>
-    <section className="betaSettingsSection"><h3>Optional private-network AI</h3><p>Ollama can run on this gaming PC or another computer on the same trusted private network. ShipOS accepts only <code>127.0.0.1</code> or a private IPv4 address and always uses port <code>11434</code>; public hosts and arbitrary URLs are rejected.</p>
+    <section className="betaSettingsSection"><h3>Optional private-network AI</h3><p>Ollama can run on this ShipOS computer or another computer on the same trusted private network. ShipOS accepts only <code>127.0.0.1</code> or a private IPv4 address and always uses port <code>11434</code>; public hosts and arbitrary URLs are rejected.</p>
       <label>AI computer IPv4 address<input value={aiHost} onChange={event => setAiHost(event.target.value)} placeholder="127.0.0.1 or 192.168.1.50" inputMode="decimal" maxLength={15} /></label>
       <label>Installed Ollama model name<input value={model} onChange={event => setModel(event.target.value)} placeholder="Exact model name installed on the AI computer" maxLength={160} /></label>
       <div className="betaActions"><button disabled={busy || !model.trim() || !aiHost.trim()} onClick={() => void act(async () => { await localApi('/api/admin/ai', { model: model.trim(), host: aiHost.trim(), enabled: true }); setMessage('Private-network AI enabled. Switch to Storytelling to use it.'); window.dispatchEvent(new Event('shipos:ai-settings')) })}>Enable AI computer</button><button disabled={busy} onClick={() => void act(async () => { await localApi('/api/admin/ai', { model: model.trim(), host: aiHost.trim() || '127.0.0.1', enabled: false }); window.dispatchEvent(new Event('shipos:ai-settings')) })}>Disable AI</button></div>
@@ -128,14 +134,26 @@ function LocalSettings({ session, status, refresh }: { session: LocalSession; st
     <section className="betaSettingsSection"><h3>Remote gaming-PC bridge</h3>
       <p>Run Space Engineers on another Windows computer while ShipOS and Ollama stay here. The bundled collector sends telemetry to this app and carries ShipOS chat replies back to the game over your trusted private network.</p>
       <p><strong>The bridge can exchange telemetry and local ShipOS chat text only.</strong> Its key does not grant story, settings, block control, inventory, save, or hosted-relay access.</p>
+      <ol className="betaSteps">
+        <li>On the Windows gaming PC, install Node.js 24, open PowerShell, and run the first-time setup commands below.</li>
+        <li>Close Space Engineers, add <strong>ShipOSLocalTelemetry</strong> to the save's Mods list, and reload that world.</li>
+        <li>On this computer, create the connection command. ShipOS will enable the selected LAN address automatically.</li>
+        <li>Run the generated command on the gaming PC and leave that PowerShell window open while playing.</li>
+      </ol>
+      <label className="betaCommand">First-time gaming-PC setup<textarea readOnly rows={4} value={gamePcSetupCommand} onFocus={event => event.currentTarget.select()} /></label>
+      <div className="betaActions"><button disabled={busy} onClick={() => void navigator.clipboard.writeText(gamePcSetupCommand).then(() => setMessage('First-time gaming-PC setup commands copied.')).catch(() => setMessage('Automatic copy was blocked. Select the commands above and copy them manually.'))}>Copy first-time setup</button></div>
       <label>Gaming PC label<input value={bridgeLabel} onChange={event => setBridgeLabel(event.target.value)} maxLength={80} placeholder="Space Engineers PC" /></label>
-      <div className="betaActions"><button disabled={busy || !status?.sharing.enabled || !bridgeLabel.trim()} onClick={() => void act(async () => {
+      <p className="betaMuted">ShipOS LAN address: {status?.sharing.url ? <code>{status.sharing.url}</code> : selectedAddress ? <code>http://{selectedAddress}:5174/ (will be enabled)</code> : 'No private address detected'}.</p>
+      <div className="betaActions"><button className="betaPrimary" disabled={busy || !selectedAddress || !bridgeLabel.trim()} onClick={() => void act(async () => {
+        if (!status?.sharing.enabled || status.sharing.address !== selectedAddress) {
+          await localApi('/api/admin/sharing', { enabled: true, address: selectedAddress })
+          setAddress(selectedAddress); setQr(''); setPairUrl('')
+        }
         const created = await localApi<NewBridge>('/api/admin/bridge-devices', { label: bridgeLabel.trim() })
-        setNewBridge(created); setMessage('Game-PC bridge created. Copy the command now; the key will not be shown again.')
-      })}>Create game-PC bridge</button></div>
-      {!status?.sharing.enabled && <p className="betaMuted">Enable local sharing above before creating a bridge.</p>}
-      {newBridge && <div className="betaQr"><p><strong>Copy this now — the bridge key is shown once.</strong> Run from the cloned ShipOS repository on the Windows gaming PC with Node.js 24:</p><label>PowerShell command<textarea readOnly rows={4} value={`node .\\runtime\\game-bridge.mjs --url "${newBridge.bridgeUrl}" --token "${newBridge.token}"`} onFocus={event => event.currentTarget.select()} /></label><button disabled={busy} onClick={() => void navigator.clipboard.writeText(`node .\\runtime\\game-bridge.mjs --url "${newBridge.bridgeUrl}" --token "${newBridge.token}"`).then(() => setMessage('Gaming-PC bridge command copied.')).catch(() => setMessage('Automatic copy was blocked. Select the command above and copy it manually.'))}>Copy bridge command</button><p className="betaMuted">Treat this key like a password. This LAN link uses HTTP; never port-forward TCP 5174.</p></div>}
-      <p className="betaMuted">Status: {status?.gameBridge.connected ? 'Gaming PC connected' : 'Waiting for gaming PC'}.</p>
+        setNewBridge(created); setMessage('Connection command ready. Copy it to the gaming PC now; the key will not be shown again.')
+      })}>{status?.sharing.enabled && status.sharing.address === selectedAddress ? 'Create connection command' : 'Enable LAN & create connection command'}</button></div>
+      {newBridge && <div className="betaBridgeCommand"><p><strong>Connection command ready — copy it now. The key is shown once.</strong></p><label className="betaCommand">Run on the gaming PC from the cloned ShipOS folder<textarea readOnly rows={4} value={`node .\\runtime\\game-bridge.mjs --url "${newBridge.bridgeUrl}" --token "${newBridge.token}"`} onFocus={event => event.currentTarget.select()} /></label><button disabled={busy} onClick={() => void navigator.clipboard.writeText(`node .\\runtime\\game-bridge.mjs --url "${newBridge.bridgeUrl}" --token "${newBridge.token}"`).then(() => setMessage('Gaming-PC connection command copied. Run it from the cloned ShipOS folder.')).catch(() => setMessage('Automatic copy was blocked. Select the command above and copy it manually.'))}>Copy connection command</button><p className="betaMuted">Treat this key like a password. This LAN link uses HTTP; never port-forward TCP 5174.</p></div>}
+      <p className={`betaBridgeStatus ${status?.gameBridge.connected ? 'live' : ''}`}><strong>{status?.gameBridge.connected ? 'Connected — telemetry and chat can move both ways.' : 'Waiting for gaming PC'}</strong>{!status?.gameBridge.connected && ' · Run the generated command on the gaming PC. If it cannot connect, allow TCP 5174 on this computer’s Private-network firewall.'}</p>
       {bridgeDevices.map(device => <div className="betaDevice" key={device.id}><span>{device.label}</span><b>{device.id === status?.gameBridge.deviceId && status.gameBridge.connected ? 'Connected' : device.lastSeenAt ? `Last seen ${new Date(device.lastSeenAt).toLocaleString()}` : 'Never connected'}</b><button onClick={() => void act(async () => { await localApi('/api/admin/bridge-devices', { id: device.id, revoke: true }); if (newBridge?.id === device.id) setNewBridge(null) })}>Revoke</button></div>)}
     </section>
     <section className="betaSettingsSection"><h3>In-game ShipOS comms</h3>
@@ -192,14 +210,14 @@ export function App() {
     return () => { cancelled = true; window.clearInterval(timer) }
   }, [])
   return <>
-    <header className="betaHeader"><a href="/" className="betaBrand" aria-label="ShipOS home">SHIP<span>OS</span><small>LOCAL BETA</small></a><nav aria-label="Main pages"><button aria-current={page === 'telemetry' ? 'page' : undefined} onClick={() => setPage('telemetry')}>Telemetry</button><button aria-current={page === 'story' ? 'page' : undefined} onClick={() => setPage('story')}>Storytelling <small>RP beta</small></button></nav><span className={`betaConnection ${status?.telemetry.connected ? 'live' : ''}`}>{status?.telemetry.connected ? 'Game connected' : 'Waiting / stale'}</span></header>
+    <header className="betaHeader"><a href="/" className="betaBrand" aria-label={`ShipOS local beta version ${status?.version || fallbackVersion}`}>SHIP<span>OS</span><small>LOCAL BETA · v{status?.version || fallbackVersion}</small></a><nav aria-label="Main pages"><button aria-current={page === 'telemetry' ? 'page' : undefined} onClick={() => setPage('telemetry')}>Telemetry</button><button aria-current={page === 'story' ? 'page' : undefined} onClick={() => setPage('story')}>Storytelling <small>RP beta</small></button></nav><span className={`betaConnection ${status?.telemetry.connected ? 'live' : ''}`}>{status?.telemetry.connected ? 'Game connected' : 'Waiting / stale'}</span></header>
     {ready ? <>
-      <div className="betaStatus"><span>{status?.worldName || ready.world.name}</span><span>{ready.session.role === 'editor' ? 'Paired play screen' : 'Gaming PC console'}</span></div>
+      <div className="betaStatus"><span>{status?.worldName || ready.world.name}</span><span>{ready.session.role === 'editor' ? 'Paired play screen' : 'ShipOS host console'}</span></div>
       {(!status?.telemetry.stableWorldIdentity || status.worldId !== ready.world.worldId) && <p className="betaNotice">{status?.worldId !== ready.world.worldId && status ? 'World changed. Reload to open its separate records.' : 'Waiting for stable world identity. Enable the bundled telemetry mod and reload your world. Until then, records belong to an unassigned local profile.'}</p>}
       {page === 'story' && <MissionStart viewer={false} />}
       <ShipOSPage readOnly={false} worldId={ready.world.worldId} experience={page === 'telemetry' ? 'navigation' : 'console'}
         configuration={<LocalSettings session={ready.session} status={status} refresh={refresh} />} />
-    </> : <section className="betaMission"><h1>{error ? 'Let’s reconnect ShipOS' : 'Opening your local console…'}</h1><p>{error || 'Connecting to the helper on the gaming PC.'}</p>{error && <><p>On a tablet, generate a fresh pairing QR on the PC. On the PC, launch ShipOS from its shortcut.</p><button onClick={() => window.location.reload()}>Retry</button></>}</section>}
+    </> : <section className="betaMission"><h1>{error ? 'Let’s reconnect ShipOS' : 'Opening your local console…'}</h1><p>{error || 'Connecting to the helper on the ShipOS host.'}</p>{error && <><p>On a tablet, generate a fresh pairing QR on the ShipOS host. On that computer, launch ShipOS from its shortcut.</p><button onClick={() => window.location.reload()}>Retry</button></>}</section>}
     <footer className="betaFooter">Free & open source · MIT · No subscriptions · Local-first with optional secure telemetry relay</footer>
     <BetaNotice />
   </>

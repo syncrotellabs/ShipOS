@@ -27,6 +27,9 @@ test('main pages, first-visit beta notice, configuration drawer, and fragment pa
   assert.match(app, /One engineer\. A planet\. Your next move\./)
   assert.match(app, /story read\/write included\. No account or login/)
   assert.match(app, /Copy pairing link/)
+  assert.match(app, /LOCAL BETA · v/)
+  assert.match(app, /Enable LAN & create connection command/)
+  assert.match(app, /The QR connects a browser or tablet only/)
 })
 
 test('transient storage messages stay below the map instead of shifting telemetry', async () => {

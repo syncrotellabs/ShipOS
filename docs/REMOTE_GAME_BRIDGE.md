@@ -12,10 +12,10 @@ Telemetry and addressed in-game chat travel from the gaming computer to ShipOS. 
 On the ShipOS computer, open Configuration:
 
 1. Configure Ollama with `127.0.0.1` when it runs on the ShipOS computer, or the Ollama computer's private IPv4 address.
-2. Enable **iPad & local-network sharing** on the private IPv4 address reachable from the gaming computer.
-3. Under **Remote gaming-PC bridge**, enter a label and choose **Create game-PC bridge**.
-4. Copy the generated PowerShell command immediately. Its high-entropy key is displayed once; ShipOS stores only its SHA-256 hash.
-5. Enable **In-game ShipOS comms**. Proactive updates remain off unless a 10, 20, or 30 minute cadence is selected.
+2. Under **Remote gaming-PC bridge**, follow the numbered checklist, enter a label, and choose **Enable LAN & create connection command**. This enables the selected private IPv4 address automatically; the tablet QR is not used for the game bridge.
+3. Copy the generated PowerShell command immediately.
+   Its high-entropy key is displayed once; ShipOS stores only its SHA-256 hash.
+4. Enable **In-game ShipOS comms**. Proactive updates remain off unless a 10, 20, or 30 minute cadence is selected.
 
 ShipOS does not add firewall rules. If the gaming computer cannot connect, allow inbound TCP `5174` to the ShipOS Node runtime on the Windows **Private** profile only. Never forward this port on the router or expose it through a public reverse proxy.
 
@@ -53,4 +53,3 @@ The link is authenticated but uses unencrypted HTTP on the LAN. Anyone who obtai
 - **Telemetry is stale:** control a character or cockpit and confirm `%APPDATA%\SpaceEngineers\Storage\ShipOSLocalTelemetry.latest.json` updates on the gaming computer.
 - **No chat reply:** confirm mod `2026.11.13.1` or newer is loaded, ShipOS comms and Ollama are enabled, and the collector remains connected. The current game session and world must match the latest telemetry packet.
 - **`401 Invalid or revoked game-bridge key`:** create a replacement bridge entry and restart the collector with the new command.
-

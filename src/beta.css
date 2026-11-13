@@ -10,7 +10,7 @@ a { color: #97e7cb; }
 .betaHeader { display: flex; align-items: center; gap: 38px; padding: 22px 32px; border-bottom: 1px solid #263940; background: #0b141b; }
 .betaBrand { color: #eff8f8; font: 700 29px/1 var(--shipos-tech-font); text-decoration: none; letter-spacing: 2px; display: flex; align-items: center; }
 .betaBrand > span { color: #7fe1c0; }
-.betaBrand > small { display: block; margin-left: 13px; border-left: 1px solid #45616a; padding-left: 13px; font-size: 9px; width: 56px; line-height: 1.6; color: #90aab4; }
+.betaBrand > small { display: block; margin-left: 13px; border-left: 1px solid #45616a; padding-left: 13px; font-size: 9px; line-height: 1.6; color: #90aab4; white-space: nowrap; }
 .betaHeader nav { display: flex; gap: 8px; }
 .betaHeader nav button { border-color: transparent; background: transparent; font-size: 16px; color: #93a8b0; }
 .betaHeader nav button[aria-current] { border-color: #406454; color: #baffdf; background: #19322a; }
@@ -51,6 +51,13 @@ a { color: #97e7cb; }
 .betaDevice span { flex: 1; }
 .betaQr { display: flex; flex-wrap: wrap; align-items: center; gap: 25px; margin: 18px 0; }
 .betaQr img { width: 280px; max-width: 100%; border-radius: 8px; }
+.betaSteps { max-width: 850px; margin: 16px 0; padding-left: 24px; color: #b7cbd0; font: 600 14px/1.65 var(--shipos-tech-font); }
+.betaSteps li { margin: 7px 0; padding-left: 5px; }
+.betaCommand { max-width: 850px; }
+.betaCommand textarea { width: 100%; box-sizing: border-box; resize: vertical; font: 12px/1.55 ui-monospace, monospace; }
+.betaBridgeCommand { max-width: 900px; margin: 18px 0; padding: 18px; border: 1px solid #5a8b7b; border-radius: 8px; background: #142b29; }
+.betaBridgeStatus { max-width: 900px !important; padding: 12px 14px; border: 1px solid #675b39; border-radius: 6px; background: #272417; color: #e6cd8c !important; }
+.betaBridgeStatus.live { border-color: #4c806c; background: #142a23; color: #9de4c4 !important; }
 .betaMuted { color: #90a8af !important; font-size: 12px !important; overflow-wrap: anywhere; }
 .betaDanger { margin: 12px 0; color: #ffb9a9; border-color: #734c42; }
 .betaDialog { color: #d4e9e4; background: #102127; border: 1px solid #618e82; border-radius: 16px; padding: 36px; width: min(560px, calc(100vw - 32px)); max-height: 90dvh; box-shadow: 0 30px 100px #0009; }
