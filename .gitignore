@@ -6,5 +6,7 @@ dist/
 !.env.example
 coverage/
 *.log
+**/obj/
+**/bin/
 public/shipos/addons/*.zip
 runtime/node.exe

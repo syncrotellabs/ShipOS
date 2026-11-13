@@ -175,7 +175,7 @@ internal static class Setup
         AddTitle("Install ShipOS", "The recommended setup is automatic, local, and reversible.");
         AddText("Express setup installs the app, bundled Node runtime, tray helper, shortcuts, and telemetry mod; enables telemetry for the most recently played local save; starts ShipOS with Windows; and opens the app when finished.", 112, 82, 10, Window.ForeColor);
         AddText("Before changing a save, ShipOS keeps the original configuration and checkpoint under its local save-backups folder. New saves are enabled after Space Engineers closes, ready for their next session.", 202, 76, 10, Color.FromArgb(183, 207, 210));
-        AddText("If the game is open, setup will not touch its active files. Exit and reopen the game once when convenient—the helper finishes configuration after the game closes. No account, subscription, cloud relay, or downloaded prerequisite is involved.", 287, 76, 9, Color.FromArgb(236, 205, 156));
+        AddText("If the game is open, setup will not touch its active files. Exit and reopen the game once when convenient—the helper finishes configuration after the game closes. No account, subscription, or downloaded prerequisite is required. The optional Echoboard telemetry relay stays off until configured later.", 287, 76, 9, Color.FromArgb(236, 205, 156));
         AddSmallButton("Advanced options", 8, 371, 150, delegate { Step = 1; RenderStep(); });
         Next.Text = "Install ShipOS"; Next.Enabled = true;
     }

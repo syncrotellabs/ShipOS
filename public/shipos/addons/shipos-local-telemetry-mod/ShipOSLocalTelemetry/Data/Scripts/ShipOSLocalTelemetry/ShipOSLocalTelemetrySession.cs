@@ -17,7 +17,7 @@ namespace ShipOSLocalTelemetry
     public class ShipOSLocalTelemetrySession : MySessionComponentBase
     {
         private const string OutputFileName = "ShipOSLocalTelemetry.latest.json";
-        private const string ModVersion = "2026.09.04.1";
+        private const string ModVersion = "2026.11.12.1";
         private const string FleetTag = "[ShipOS]";
         private const int MaxFleetGrids = 128;
         private const string WorldIdentityFile = "ShipOS.world-id.txt";
@@ -25,6 +25,7 @@ namespace ShipOSLocalTelemetry
         private const int ContactScanPacketInterval = 5;
         private const double ContactRangeMeters = 250000.0;
         private const int MaxContacts = 80;
+        private const int MaxGpsContacts = 256;
         private const double TerrainScanRangeMeters = 1600.0;
         private const double TerrainScanCeilingMeters = 12000.0;
         private static readonly double[] TerrainAheadMeters = { 0.0, 200.0, 450.0, 800.0, 1200.0, 1600.0 };
@@ -448,13 +449,13 @@ namespace ShipOSLocalTelemetry
         private static void AppendContacts(StringBuilder packet, IMyEntity subject, Vector3D origin)
         {
             packet.Append('[');
+            int emitted = AppendGpsContacts(packet, origin);
             if (MyAPIGateway.Entities == null)
             {
                 packet.Append(']');
                 return;
             }
 
-            int emitted = 0;
             HashSet<IMyEntity> planets = new HashSet<IMyEntity>();
             try
             {
@@ -522,6 +523,53 @@ namespace ShipOSLocalTelemetry
             }
 
             packet.Append(']');
+        }
+
+        private static int AppendGpsContacts(StringBuilder packet, Vector3D origin)
+        {
+            if (MyAPIGateway.Session == null || MyAPIGateway.Session.GPS == null || MyAPIGateway.Session.Player == null) return 0;
+
+            List<IMyGps> gpsPoints = new List<IMyGps>();
+            try
+            {
+                MyAPIGateway.Session.GPS.GetGpsList(MyAPIGateway.Session.Player.IdentityId, gpsPoints);
+            }
+            catch
+            {
+                return 0;
+            }
+
+            int written = 0;
+            for (int index = 0; index < gpsPoints.Count && written < MaxGpsContacts; index++)
+            {
+                IMyGps gps = gpsPoints[index];
+                if (gps == null) continue;
+                Vector3D position = gps.Coords;
+                Color color = gps.GPSColor;
+                if (written > 0) packet.Append(',');
+                packet.Append('{');
+                AppendString(packet, "id", "se-gps-" + gps.Hash.ToString(CultureInfo.InvariantCulture), false);
+                AppendString(packet, "name", string.IsNullOrWhiteSpace(gps.Name) ? "GPS " + (index + 1).ToString(CultureInfo.InvariantCulture) : gps.Name, true);
+                AppendString(packet, "kind", "gps", true);
+                AppendString(packet, "className", "Player GPS fix", true);
+                AppendNumber(packet, "x", position.X, true);
+                AppendNumber(packet, "y", position.Y, true);
+                AppendNumber(packet, "z", position.Z, true);
+                AppendNumber(packet, "velocityX", 0, true);
+                AppendNumber(packet, "velocityY", 0, true);
+                AppendNumber(packet, "velocityZ", 0, true);
+                AppendNumber(packet, "speed", 0, true);
+                AppendNumber(packet, "distanceMeters", Vector3D.Distance(origin, position), true);
+                AppendString(packet, "status", gps.ShowOnHud ? "Visible on Space Engineers HUD" : "Stored in Space Engineers GPS", true);
+                AppendString(packet, "color", string.Format(CultureInfo.InvariantCulture, "#{0:X2}{1:X2}{2:X2}", color.R, color.G, color.B), true);
+                AppendString(packet, "notes", string.IsNullOrWhiteSpace(gps.Description) ? "Space Engineers player GPS" : gps.Description, true);
+                AppendString(packet, "relationship", string.Empty, true);
+                AppendString(packet, "contactSource", "game-gps", true);
+                AppendString(packet, "antennaName", string.Empty, true);
+                packet.Append('}');
+                written++;
+            }
+            return written;
         }
 
         private static void AppendPlanetContact(StringBuilder packet, MyPlanet planet, Vector3D origin)

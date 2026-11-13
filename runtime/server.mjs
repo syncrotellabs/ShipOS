@@ -27,6 +27,8 @@ const json = (res, status, value, headers = {}) => {
 }
 const cookieValue = req => /(?:^|;\s*)shipos_device=([A-Za-z0-9_-]{43})(?:;|$)/.exec(req.headers.cookie || '')?.[1]
 const cookie = value => `shipos_device=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=2592000`
+const hostedRelayUrl = 'https://shipos.echoboardhq.com/api/relay/telemetry'
+const validRelayToken = value => /^shipos_relay_[A-Za-z0-9_-]{43}$/.test(String(value || ''))
 
 export function validateState(state) {
   if (!isObject(state) || Object.keys(state).length > 150) throw fail(400, 'Invalid campaign state.')
@@ -65,6 +67,7 @@ export function validatePacket(packet) {
 
 export async function createShipOsServer(options = {}) {
   const addresses = options.networkAddresses || privateAddresses
+  const relayFetch = options.relayFetch || fetch
   const dataDir = options.dataDir || process.env.SHIPOS_DATA_DIR || path.join(process.env.LOCALAPPDATA || root, 'ShipOS', 'Data')
   const staticDir = options.staticDir || path.join(root, 'dist')
   const watchFile = options.watchFile ?? path.join(process.env.APPDATA || '', 'SpaceEngineers', 'Storage', 'ShipOSLocalTelemetry.latest.json')
@@ -92,6 +95,11 @@ export async function createShipOsServer(options = {}) {
     const saved = getSetting('ai', {})
     return { model: String(saved.model || ''), enabled: Boolean(saved.enabled), host: safeAiHost(saved.host) }
   }
+  const relaySettings = () => {
+    const saved = getSetting('telemetryRelay', {})
+    const relayToken = validRelayToken(saved.token) ? String(saved.token) : ''
+    return { enabled: Boolean(saved.enabled && relayToken), token: relayToken }
+  }
   let activeWorld = getSetting('activeWorld', 'unassigned-world')
   const ensureWorld = (id, name) => db.prepare('INSERT OR IGNORE INTO worlds(id,name,updatedAt) VALUES (?,?,?)').run(id, name, new Date().toISOString())
   ensureWorld(activeWorld, activeWorld === 'unassigned-world' ? 'Star System — awaiting world identity' : 'Star System')
@@ -104,6 +112,10 @@ export async function createShipOsServer(options = {}) {
   let lanAddress = null
   let pairing = null
   let aiBusy = false
+  let relayBusy = false
+  let relayLastSuccessAt = null
+  let relayError = ''
+  let relayNextAttemptAt = 0
   let stopped = false
   let localPort = port
   const localSessions = new Map()
@@ -137,8 +149,44 @@ export async function createShipOsServer(options = {}) {
     version: '0.2.0-beta.5', mode: 'Local single-player', worldId: activeWorld, worldName: worldState().name, uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
     telemetry: { connected: Boolean(latest) && Date.now() - Date.parse(latest.stamp) < 15_000, stamp: latest?.stamp ?? null, accepted, rejected, error: lastError, watchFile, stableWorldIdentity: Boolean(latest?.worldId) },
     sharing: { enabled: Boolean(lanServer), address: lanAddress, url: lanAddress ? `http://${lanAddress}:${localPort}/` : null, addresses: addresses() },
-    ai: aiSettings(), database: 'SQLite', dataDir,
+    ai: aiSettings(),
+    relay: {
+      enabled: relaySettings().enabled,
+      configured: Boolean(relaySettings().token),
+      connected: relaySettings().enabled && Boolean(relayLastSuccessAt) && Date.now() - Date.parse(relayLastSuccessAt) < 20_000,
+      url: 'https://shipos.echoboardhq.com',
+      lastSuccessAt: relayLastSuccessAt,
+      error: relayError,
+    },
+    database: 'SQLite', dataDir,
   })
+  const relayTelemetry = async packet => {
+    const relay = relaySettings()
+    if (!relay.enabled || relayBusy || stopped || Date.now() < relayNextAttemptAt) return
+    relayBusy = true
+    try {
+      const response = await relayFetch(hostedRelayUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${relay.token}`,
+          'Content-Type': 'application/json',
+          'X-ShipOS-Relay': 'telemetry-v1',
+        },
+        body: JSON.stringify(packet),
+        signal: AbortSignal.timeout(10_000),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw Error(result.error || `Hosted relay returned HTTP ${response.status}.`)
+      relayLastSuccessAt = new Date().toISOString()
+      relayError = ''
+      relayNextAttemptAt = 0
+    } catch (error) {
+      relayError = `Telemetry relay: ${error.message}`
+      relayNextAttemptAt = Date.now() + 15_000
+    } finally {
+      relayBusy = false
+    }
+  }
   const ingest = packet => {
     validatePacket(packet)
     const id = packet.worldId || 'unassigned-world'
@@ -159,6 +207,7 @@ export async function createShipOsServer(options = {}) {
     db.prepare('INSERT INTO packets(worldId,stamp,packet) VALUES (?,?,?)').run(id, packet.stamp, JSON.stringify(packet))
     db.prepare('DELETE FROM packets WHERE id NOT IN (SELECT id FROM packets ORDER BY id DESC LIMIT 1000)').run()
     db.prepare('DELETE FROM packets WHERE id IN (SELECT id FROM (SELECT id, SUM(length(packet)) OVER (ORDER BY id DESC) AS bytes FROM packets) WHERE bytes > 32000000)').run()
+    void relayTelemetry(packet)
     return true
   }
   let reading = false
@@ -317,6 +366,23 @@ export async function createShipOsServer(options = {}) {
           const host = safeAiHost(body.host)
           setSetting('ai', { model: body.model, host, enabled: Boolean(body.enabled && body.model) })
           return json(res, 200, status().ai)
+        }
+        if (route === '/api/admin/relay' && req.method === 'POST') {
+          const body = await bodyJson(req)
+          if (!body.enabled) {
+            setSetting('telemetryRelay', { enabled: false, token: '' })
+            relayError = ''
+            relayLastSuccessAt = null
+            relayNextAttemptAt = 0
+            return json(res, 200, status().relay)
+          }
+          if (!validRelayToken(body.token)) throw fail(400, 'Paste a valid relay key generated by the hosted ShipOS administrator page.')
+          setSetting('telemetryRelay', { enabled: true, token: String(body.token) })
+          relayError = latest ? 'Waiting to send the current game packet.' : 'Waiting for game telemetry.'
+          relayLastSuccessAt = null
+          relayNextAttemptAt = 0
+          if (latest) void relayTelemetry(latest)
+          return json(res, 200, status().relay)
         }
         if (route === '/api/admin/backup' && req.method === 'GET') return json(res, 200, { format: 'shipos-local-backup-v1', ...worldState() }, { 'Content-Disposition': 'attachment; filename="ShipOS-story-backup.json"' })
         if (route === '/api/admin/reset' && req.method === 'POST') {

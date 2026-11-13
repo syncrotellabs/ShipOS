@@ -3517,6 +3517,31 @@ function parseSpaceEngineersGpsLines(raw: string): ShipContact[] {
     .filter((contact): contact is ShipContact => Boolean(contact))
 }
 
+function dedupeGpsContacts(contacts: ShipContact[]) {
+  const deduped: ShipContact[] = []
+  const gpsIndexes = new Map<string, number>()
+  contacts.forEach((contact) => {
+    if (contact.kind !== 'gps') {
+      deduped.push(contact)
+      return
+    }
+    const key = [
+      normalizeContactSearchText(contact.name),
+      Math.round(contact.x * 10),
+      Math.round(contact.y * 10),
+      Math.round(contact.z * 10),
+    ].join(':')
+    const existingIndex = gpsIndexes.get(key)
+    if (existingIndex === undefined) {
+      gpsIndexes.set(key, deduped.length)
+      deduped.push(contact)
+      return
+    }
+    if (contact.telemetryManaged && !deduped[existingIndex].telemetryManaged) deduped[existingIndex] = contact
+  })
+  return deduped
+}
+
 function normalizeTelemetryContactKind(value: unknown): ShipContactKind {
   const normalized = String(value || '').trim().toLowerCase()
   if (normalized === 'body' || normalized === 'planet' || normalized === 'moon') return 'body'
@@ -3996,7 +4021,7 @@ function isTelemetryManagedContact(contact: ShipContact) {
   const id = contact.id.trim().toLowerCase()
   const notes = contact.notes.trim()
   return ['se-', 'grid-', 'voxel-', 'signal-', 'planet-', 'uplink-contact-'].some((prefix) => id.startsWith(prefix))
-    || ['antenna', 'beacon', 'grid', 'planet-registry'].includes(contact.contactSource?.trim().toLowerCase() ?? '')
+    || ['antenna', 'beacon', 'game-gps', 'grid', 'planet-registry'].includes(contact.contactSource?.trim().toLowerCase() ?? '')
     || notes.startsWith('Imported from telemetry packet ')
     || notes.startsWith('Space Engineers entity ')
     || notes.startsWith('Client plugin ')
@@ -4683,7 +4708,7 @@ function createShipVectorGeometry(selected: boolean) {
   return geometry
 }
 
-function latestShipVector(telemetryTrail: TelemetrySample[]) {
+function latestMotionVector(telemetryTrail: TelemetrySample[]) {
   const velocitySample = telemetryTrail.find((sample) => {
     const velocityMagnitude = Math.hypot(
       Number(sample.velocityX) || 0,
@@ -4712,6 +4737,29 @@ function latestShipVector(telemetryTrail: TelemetrySample[]) {
   }
 
   return new THREE.Vector3(0, 0, 1)
+}
+
+function latestShipAttitude(attitudeTelemetry: TelemetryPacket | null, telemetryTrail: TelemetrySample[]) {
+  const attitudePacket = attitudeTelemetry
+    ?? telemetryTrail.find((sample) => Boolean(normalizeTelemetryVector(telemetryVectorFromKeys(sample, 'forwardX', 'forwardY', 'forwardZ'))))
+    ?? null
+  const reportedForward = normalizeTelemetryVector(telemetryVectorFromKeys(attitudePacket, 'forwardX', 'forwardY', 'forwardZ'))
+  const reportedUp = normalizeTelemetryVector(telemetryVectorFromKeys(attitudePacket, 'upX', 'upY', 'upZ'))
+  const forward = reportedForward
+    ? new THREE.Vector3(reportedForward.x, reportedForward.y * 0.72, reportedForward.z).normalize()
+    : latestMotionVector(telemetryTrail)
+  const up = reportedUp
+    ? new THREE.Vector3(reportedUp.x, reportedUp.y * 0.72, reportedUp.z)
+    : new THREE.Vector3(0, 1, 0)
+
+  up.addScaledVector(forward, -up.dot(forward))
+  if (up.lengthSq() < 0.0001) {
+    up.copy(Math.abs(forward.y) < 0.92 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0))
+    up.addScaledVector(forward, -up.dot(forward))
+  }
+  up.normalize()
+
+  return { forward, up, source: reportedForward ? 'attitude' as const : 'motion' as const }
 }
 
 function focusMapCameraOn(camera: THREE.PerspectiveCamera, controls: OrbitControls, focusPosition: THREE.Vector3) {
@@ -4940,6 +4988,7 @@ function ShipSystemMap({
   selectedContactId,
   bodyScaleMode,
   cameraMode,
+  attitudeTelemetry,
   onSelectContact,
   telemetryTrail,
 }: {
@@ -4955,6 +5004,7 @@ function ShipSystemMap({
   selectedContactId: string | null
   bodyScaleMode: BodyScaleMode
   cameraMode: MapCameraMode
+  attitudeTelemetry: TelemetryPacket | null
   onSelectContact: (id: string) => void
   telemetryTrail: TelemetrySample[]
 }) {
@@ -5125,13 +5175,14 @@ function ShipSystemMap({
       ? currentShipContact
       : contacts.find((contact) => contact.id === focusContactId) ?? currentShipContact
     const mapProjection = createSystemMapProjection(contacts, currentPosition, telemetryTrail, projectedContact)
-    const shipVector = latestShipVector(telemetryTrail)
-    const projectedFlightVector = projectedContact && projectedContact.id !== currentShipContact.id
-      ? displayContactPosition(projectedContact, currentPosition, mapProjection, systemBodies, bodyScaleMode)
-      : null
-    const forwardDirection = projectedFlightVector && projectedFlightVector.lengthSq() > 0.0001
-      ? projectedFlightVector.clone().normalize()
-      : shipVector.clone()
+    const shipAttitude = latestShipAttitude(attitudeTelemetry, telemetryTrail)
+    const shipVector = shipAttitude.forward
+    const shipUp = shipAttitude.up
+    const forwardDirection = shipVector.clone()
+    const speedMetersPerSecond = Math.max(0, Number(attitudeTelemetry?.speed) || 0)
+    const courseProjectionMeters = clampNumber(Math.max(25000, speedMetersPerSecond * 60), 25000, 250000)
+    const courseProjectionLength = clampNumber(courseProjectionMeters * mapProjection.scale, 14, 180)
+    const courseProjectionEnd = forwardDirection.clone().multiplyScalar(courseProjectionLength)
     const focusedPosition = focusedContact.id === currentShipContact.id
       ? new THREE.Vector3(0, 0, 0)
       : displayContactPosition(focusedContact, currentPosition, mapProjection, systemBodies, bodyScaleMode)
@@ -5169,13 +5220,12 @@ function ShipSystemMap({
           target: controls.target.clone(),
         }
       }
-      const lookDistance = clampNumber(projectedFlightVector?.length() ?? 120, 48, 220)
-      camera.position.copy(forwardDirection).multiplyScalar(2.4)
-      camera.position.y += 0.68
+      const lookDistance = clampNumber(courseProjectionLength, 48, 220)
+      camera.position.copy(forwardDirection).multiplyScalar(-2.4).addScaledVector(shipUp, 0.68)
       controls.target.copy(forwardDirection).multiplyScalar(lookDistance)
       controls.enabled = false
       camera.fov = 66
-      camera.up.set(0, 1, 0)
+      camera.up.copy(shipUp)
       camera.lookAt(controls.target)
       camera.updateProjectionMatrix()
     }
@@ -5234,6 +5284,35 @@ function ShipSystemMap({
     }
     orbitMaterial.dispose()
     moonOrbitMaterial.dispose()
+
+    const courseLine = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0.08, 0), courseProjectionEnd]),
+      new THREE.LineDashedMaterial({ color: '#7de8d2', dashSize: 3.2, gapSize: 1.45, transparent: true, opacity: 0.82 }),
+    )
+    courseLine.computeLineDistances()
+    courseLine.renderOrder = 5
+    courseLine.userData.attitudeCourse = true
+    disableMapPicking(courseLine)
+    markerGroup.add(courseLine)
+
+    const courseArrowGeometry = new THREE.ConeGeometry(0.72, 2.2, 4, 1)
+    courseArrowGeometry.rotateX(Math.PI / 2)
+    const courseArrow = new THREE.Mesh(
+      courseArrowGeometry,
+      new THREE.MeshBasicMaterial({ color: '#7de8d2', depthWrite: false, transparent: true, opacity: 0.92 }),
+    )
+    courseArrow.position.copy(courseProjectionEnd)
+    courseArrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), forwardDirection)
+    courseArrow.userData.attitudeCourse = true
+    disableMapPicking(courseArrow)
+    markerGroup.add(courseArrow)
+
+    const courseLabel = createBodyLabel(`COURSE ${formatKm(courseProjectionMeters)}`, '#7de8d2', false)
+    setMapLabelScale(courseLabel, 6.2, 1.52, 0.24, 0.94)
+    courseLabel.position.copy(courseProjectionEnd).addScaledVector(shipUp, 3.2)
+    courseLabel.userData.attitudeCourse = true
+    disableMapPicking(courseLabel)
+    markerGroup.add(courseLabel)
 
     const shipSelected = selectedContactId === currentShipContact.id || focusContactId === currentShipContact.id
     const shipGeometry = createShipVectorGeometry(shipSelected)
@@ -5482,7 +5561,7 @@ function ShipSystemMap({
       hitArea.userData.contactId = contact.id
       markerGroup.add(hitArea)
     })
-  }, [bodyScaleMode, cameraMode, contacts, currentPosition, currentShipContact, encounterMemory, flightRoutes, focusContactId, focusRequestId, projectedContact, selectedContactId, systemBodies, telemetryTrail])
+  }, [attitudeTelemetry, bodyScaleMode, cameraMode, contacts, currentPosition, currentShipContact, encounterMemory, flightRoutes, focusContactId, focusRequestId, projectedContact, selectedContactId, systemBodies, telemetryTrail])
 
   return (
     <div
@@ -5491,7 +5570,7 @@ function ShipSystemMap({
       role="application"
       tabIndex={0}
       aria-label={cameraMode === 'forward'
-        ? `player forward sensor view tracking ${projectedContact?.name ?? 'the current flight vector'}.`
+        ? 'Player forward sensor view aligned to the live craft attitude.'
         : 'Interactive 3D star system map. Arrow keys pan and plus or minus zoom.'}
       onKeyDown={(event) => {
         const camera = cameraRef.current
@@ -5521,7 +5600,7 @@ function ShipSystemMap({
         <div className="shipOsForwardHud" aria-hidden="true">
           <div className="shipOsForwardHudStatus">
             <strong>INTREPID // FORWARD</strong>
-            <span>TRACK {projectedContact?.name ?? 'VELOCITY VECTOR'}</span>
+            <span>TRACK ATTITUDE COURSE</span>
           </div>
           <i className="shipOsForwardReticle" />
         </div>
@@ -5921,9 +6000,9 @@ export function ShipOSPage({
       status: `Tagged fleet telemetry · ${lastTelemetryPacket?.stamp || 'last known'}`,
       notes: 'Opted in with [ShipOS]. Ownership verified by the local game mod. Separate grids/subgrids require their own tag.',
     }))
-    return [...contacts
+    return dedupeGpsContacts([...contacts
       .map((contact) => applyContactDispositionOverride(contact, contactDesignations[contact.id]))
-      .map((contact) => applyContactFactionAssignment(contact, contactFactionAssignments[contact.id])), ...fleetContacts]
+      .map((contact) => applyContactFactionAssignment(contact, contactFactionAssignments[contact.id])), ...fleetContacts])
   }, [calibratedStarSystemBodies, contactDesignations, contactFactionAssignments, customContacts, liveTelemetryContacts, savedTelemetryContactOverrides, fleet, fleetContactIds, lastTelemetryPacket?.stamp])
   const contactFactionOptions = useMemo(
     () => createContactFactionOptions(allContacts, metagameRecords, directoryEntities),
@@ -9744,7 +9823,7 @@ export function ShipOSPage({
                   </div>
                 </div>
                 <span className="shipOsMapFocusStatus">{mapCameraMode === 'forward'
-                  ? `Forward track: ${plannedDestination.name}`
+                  ? `Attitude course: ${headingLabel(alarmFlightDirector.headingDegrees)}`
                   : `Pivot: ${mapFocusContactIsVisible ? mapLabelForContact(mapFocusContact) : `${mapLabelForContact(mapFocusContact)} hidden`}`}</span>
               </div>
             </div>
@@ -9913,7 +9992,7 @@ export function ShipOSPage({
         {(mapDrawerOpen || isNavigationExperience) && <div className="shipOsMapDrawerBody">
           {!lastTelemetryPacket && <p className="betaNotice">Waiting for game telemetry. No position, vessel, or sensor readings are assumed.</p>}
           {lastTelemetryPacket && <>
-          <ShipSystemMap contacts={visibleContacts} encounterMemory={visibleEncounterMemory} systemBodies={calibratedStarSystemBodies.filter(body => planetaryChartOverrides[body.id])} currentPosition={currentPosition} currentShipContact={currentShipContact} flightRoutes={flightRoutes} focusContactId={mapFocusContactIsVisible ? mapFocusContact.id : currentShipContactId} focusRequestId={mapFocusRequest} projectedContact={navigationPlan.destinationId ? plannedDestination : null} selectedContactId={selectedContactId} bodyScaleMode={bodyScaleMode} cameraMode={mapCameraMode} onSelectContact={handleSelectContact} telemetryTrail={telemetryHistory} />
+          <ShipSystemMap contacts={visibleContacts} encounterMemory={visibleEncounterMemory} systemBodies={calibratedStarSystemBodies.filter(body => planetaryChartOverrides[body.id])} currentPosition={currentPosition} currentShipContact={currentShipContact} flightRoutes={flightRoutes} focusContactId={mapFocusContactIsVisible ? mapFocusContact.id : currentShipContactId} focusRequestId={mapFocusRequest} projectedContact={navigationPlan.destinationId ? plannedDestination : null} selectedContactId={selectedContactId} bodyScaleMode={bodyScaleMode} cameraMode={mapCameraMode} attitudeTelemetry={lastTelemetryPacket} onSelectContact={handleSelectContact} telemetryTrail={telemetryHistory} />
           <details className="betaFlightDetail"><summary>Flight instruments & contact detail</summary>
           <ShipFlightDirector packet={displayTelemetry} currentPosition={displayPosition} bodies={calibratedStarSystemBodies} />
           <section className="shipOsVelocityTelemetry" aria-label="Relative and absolute velocity telemetry">

@@ -7,6 +7,7 @@ import { createHostedShipOsServer, signWordPressAssertion } from '../hosted/serv
 
 const secret = 'test-only-shipos-wordpress-secret-1234567890'
 const cookiePart = value => value.split(';', 1)[0]
+const packet = () => ({ worldId: 'relay-world-01', worldName: 'Relay Star System', x: 10, y: 20, z: 30, sessionId: 'relay-session', stamp: new Date().toISOString(), sequence: 1, contacts: [] })
 
 test('hosted ShipOS trusts signed WordPress roles and enforces viewer/admin writes on the server', async () => {
   const root = await mkdtemp(join(tmpdir(), 'shipos-hosted-'))
@@ -54,6 +55,25 @@ test('hosted ShipOS trusts signed WordPress roles and enforces viewer/admin writ
     const adminWrite = await fetch(`${base}/api/state`, { method: 'PUT', headers: { Cookie: admin.session, 'Content-Type': 'application/json', 'X-ShipOS-Client': 'local-beta' }, body: JSON.stringify({ worldId: before.worldId, expectedRevision: before.revision, state: {} }) })
     assert.equal(adminWrite.status, 200)
     assert.equal((await adminWrite.json()).revision, before.revision + 1)
+
+    const createRelay = await fetch(`${base}/api/admin/relay-devices`, { method: 'POST', headers: { Cookie: admin.session, 'Content-Type': 'application/json', 'X-ShipOS-Client': 'local-beta' }, body: JSON.stringify({ label: 'Test gaming PC' }) })
+    assert.equal(createRelay.status, 201)
+    const relay = await createRelay.json()
+    assert.match(relay.token, /^shipos_relay_[A-Za-z0-9_-]{43}$/)
+    const listedRelays = await (await fetch(`${base}/api/admin/relay-devices`, { headers: { Cookie: admin.session } })).json()
+    assert.equal(listedRelays[0].label, 'Test gaming PC')
+    assert.equal('token' in listedRelays[0], false)
+    const uploadHeaders = { Authorization: `Bearer ${relay.token}`, 'Content-Type': 'application/json', 'X-ShipOS-Relay': 'telemetry-v1' }
+    assert.equal((await fetch(`${base}/api/relay/telemetry`, { method: 'POST', headers: uploadHeaders, body: JSON.stringify(packet()) })).status, 202)
+    const viewerLatest = await fetch(`${base}/api/telemetry/latest`, { headers: { Cookie: viewer.session } })
+    assert.equal(viewerLatest.status, 200)
+    assert.equal((await viewerLatest.json()).worldName, 'Relay Star System')
+    const hostedStatus = await (await fetch(`${base}/api/status`, { headers: { Cookie: viewer.session } })).json()
+    assert.equal(hostedStatus.telemetry.connected, true)
+    assert.equal(hostedStatus.worldName, 'Relay Star System')
+    assert.equal((await fetch(`${base}/api/admin/relay-devices`, { method: 'POST', headers: { Cookie: viewer.session, 'Content-Type': 'application/json', 'X-ShipOS-Client': 'local-beta' }, body: JSON.stringify({ label: 'Forbidden' }) })).status, 403)
+    assert.equal((await fetch(`${base}/api/admin/relay-devices`, { method: 'POST', headers: { Cookie: admin.session, 'Content-Type': 'application/json', 'X-ShipOS-Client': 'local-beta' }, body: JSON.stringify({ id: relay.id, revoke: true }) })).status, 200)
+    assert.equal((await fetch(`${base}/api/relay/telemetry`, { method: 'POST', headers: uploadHeaders, body: JSON.stringify(packet()) })).status, 401)
 
     const replay = await fetch(`${base}/auth/callback?assertion=${encodeURIComponent(admin.assertion)}`, { headers: { Cookie: admin.stateCookie }, redirect: 'manual' })
     assert.equal(replay.status, 401)

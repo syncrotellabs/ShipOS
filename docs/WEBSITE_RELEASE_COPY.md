@@ -14,7 +14,7 @@ I plan to try Space Engineers on Linux eventually. If I can get it working relia
 
 **ShipOS 0.2.0-beta.5 for Windows 10/11 x64 — public beta**
 
-The one-click offline setup includes ShipOS, a private Node.js runtime, the tray helper, and `ShipOSLocalTelemetry`. It safely backs up and enables telemetry in the latest local save, starts with Windows, and opens the app. No account, subscription, cloud relay, system-wide Node installation, database server, or Mods-menu work is required.
+The one-click offline setup includes ShipOS, a private Node.js runtime, the tray helper, and `ShipOSLocalTelemetry`. It safely backs up and enables telemetry in the latest local save, starts with Windows, and opens the app. No account, subscription, system-wide Node installation, database server, or Mods-menu work is required. An optional Echoboard relay can later be enabled with an administrator-issued key for remote telemetry viewing; it is off by default.
 
 Before installing, read the included Requirements, Privacy, Security, and Support documents. Verify the download against `SHA256SUMS.txt`.
 

@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { validStateField } from '../runtime/validate.mjs'
+import { validatePacket } from '../runtime/server.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -49,10 +50,10 @@ function validateState(state) {
   return state
 }
 
-async function bodyJson(req) {
+async function bodyJson(req, maxSize = 13_000_000) {
   if (!String(req.headers['content-type'] || '').startsWith('application/json')) throw fail(415, 'JSON requests only.')
   const chunks = []; let size = 0
-  for await (const chunk of req) { size += chunk.length; if (size > 13_000_000) throw fail(413, 'Request too large.'); chunks.push(chunk) }
+  for await (const chunk of req) { size += chunk.length; if (size > maxSize) throw fail(413, 'Request too large.'); chunks.push(chunk) }
   try { const body = JSON.parse(Buffer.concat(chunks).toString('utf8')); if (!isObject(body)) throw Error(); return body } catch { throw fail(400, 'Malformed JSON object.') }
 }
 
@@ -74,6 +75,9 @@ export async function createHostedShipOsServer(options = {}) {
     CREATE TABLE IF NOT EXISTS worlds(id TEXT PRIMARY KEY, name TEXT NOT NULL, state TEXT NOT NULL DEFAULT '{}', revision INTEGER NOT NULL DEFAULT 0, updatedAt TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sessions(tokenHash TEXT PRIMARY KEY, wpUserId TEXT NOT NULL, displayName TEXT NOT NULL, role TEXT NOT NULL, expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS usedAssertions(jti TEXT PRIMARY KEY, expires INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS relayDevices(id TEXT PRIMARY KEY, tokenHash TEXT UNIQUE NOT NULL, label TEXT NOT NULL, createdBy TEXT NOT NULL, createdAt TEXT NOT NULL, lastSeenAt TEXT);
+    CREATE TABLE IF NOT EXISTS relayPackets(id INTEGER PRIMARY KEY, relayId TEXT NOT NULL, worldId TEXT NOT NULL, stamp TEXT NOT NULL, receivedAt TEXT NOT NULL, packet TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS relay_packets_world ON relayPackets(worldId,id);
     INSERT OR IGNORE INTO worlds(id,name,state,revision,updatedAt) VALUES ('hosted-world','ShipOS Hosted World','{}',0,datetime('now'));
   `)
   const worldState = () => { const row = db.prepare("SELECT * FROM worlds WHERE id='hosted-world'").get(); return { worldId: row.id, name: row.name, state: JSON.parse(row.state), revision: row.revision, updatedAt: row.updatedAt } }
@@ -92,6 +96,45 @@ export async function createHostedShipOsServer(options = {}) {
     if (!raw) return null
     const row = db.prepare('SELECT wpUserId,displayName,role,expires FROM sessions WHERE tokenHash=? AND expires>?').get(digest(raw), Date.now())
     return row ? { id: row.wpUserId, displayName: row.displayName, role: row.role } : null
+  }
+  const latestTelemetryRow = () => db.prepare('SELECT relayId,worldId,stamp,receivedAt,packet FROM relayPackets ORDER BY id DESC LIMIT 1').get()
+  const telemetryStatus = () => {
+    const row = latestTelemetryRow()
+    if (!row) return { connected: false, stamp: null, error: 'Waiting for a configured gaming PC telemetry relay.', stableWorldIdentity: false }
+    const fresh = Date.now() - Date.parse(row.receivedAt) < 20_000 && Date.now() - Date.parse(row.stamp) < 30_000
+    return {
+      connected: fresh,
+      stamp: row.stamp,
+      receivedAt: row.receivedAt,
+      error: fresh ? '' : 'The gaming PC telemetry relay is stale.',
+      stableWorldIdentity: row.worldId !== 'unassigned-world',
+    }
+  }
+  const authenticateRelay = req => {
+    const match = /^Bearer (shipos_relay_[A-Za-z0-9_-]{43})$/.exec(String(req.headers.authorization || ''))
+    if (!match) return null
+    return db.prepare('SELECT id,label,lastSeenAt FROM relayDevices WHERE tokenHash=?').get(digest(match[1])) || null
+  }
+  const receiveTelemetry = async (req, relay) => {
+    if (req.headers['x-shipos-relay'] !== 'telemetry-v1') throw fail(403, 'Missing telemetry relay protection.')
+    if (relay.lastSeenAt && Date.now() - Date.parse(relay.lastSeenAt) < 750) throw fail(429, 'Telemetry relay packets are arriving too quickly.')
+    const packet = validatePacket(await bodyJson(req, 2_000_000))
+    const worldId = packet.worldId || 'unassigned-world'
+    const latestForRelay = db.prepare('SELECT stamp,packet FROM relayPackets WHERE relayId=? ORDER BY id DESC LIMIT 1').get(relay.id)
+    if (latestForRelay) {
+      if (latestForRelay.packet === JSON.stringify(packet)) return { accepted: false, duplicate: true, worldId, stamp: packet.stamp }
+      if (Date.parse(packet.stamp) < Date.parse(latestForRelay.stamp)) throw fail(409, 'A newer telemetry packet has already been received.')
+    }
+    const receivedAt = new Date().toISOString()
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      db.prepare('INSERT INTO relayPackets(relayId,worldId,stamp,receivedAt,packet) VALUES (?,?,?,?,?)').run(relay.id, worldId, packet.stamp, receivedAt, JSON.stringify(packet))
+      db.prepare('UPDATE relayDevices SET lastSeenAt=? WHERE id=?').run(receivedAt, relay.id)
+      db.prepare('DELETE FROM relayPackets WHERE id NOT IN (SELECT id FROM relayPackets ORDER BY id DESC LIMIT 1000)').run()
+      db.prepare('DELETE FROM relayPackets WHERE id IN (SELECT id FROM (SELECT id, SUM(length(packet)) OVER (ORDER BY id DESC) AS bytes FROM relayPackets) WHERE bytes > 32000000)').run()
+      db.exec('COMMIT')
+    } catch (error) { db.exec('ROLLBACK'); throw error }
+    return { accepted: true, worldId, stamp: packet.stamp, receivedAt }
   }
   const securityHeaders = res => {
     res.setHeader('X-Content-Type-Options', 'nosniff')
@@ -134,6 +177,11 @@ export async function createHostedShipOsServer(options = {}) {
         const raw = cookieValue(req, 'shipos_hosted'); if (raw) db.prepare('DELETE FROM sessions WHERE tokenHash=?').run(digest(raw))
         return redirect(res, mainSite, { 'Set-Cookie': sessionCookie('', 0) })
       }
+      if (route === '/api/relay/telemetry' && req.method === 'POST') {
+        const relay = authenticateRelay(req)
+        if (!relay) throw fail(401, 'A valid ShipOS telemetry relay key is required.')
+        return json(res, 202, await receiveTelemetry(req, relay))
+      }
       const user = authenticate(req)
       if (route.startsWith('/api/')) {
         if (!user) throw fail(401, 'A WordPress session is required.')
@@ -145,13 +193,40 @@ export async function createHostedShipOsServer(options = {}) {
         if (route === '/api/session' && req.method === 'GET') return json(res, 200, { role: user.role, displayName: user.displayName, worldId: 'hosted-world', beta: '0.2' })
         if (route === '/api/state' && req.method === 'GET') return json(res, 200, worldState())
         if (route === '/api/state' && req.method === 'PUT') return json(res, 200, updateState(await bodyJson(req)))
-        if (route === '/api/status' && req.method === 'GET') return json(res, 200, { version: '0.2.0-beta.5', mode: 'Hosted WordPress access', worldId: 'hosted-world', worldName: worldState().name, telemetry: { connected: false, stamp: null, error: 'Live Space Engineers telemetry remains local to the gaming PC.', stableWorldIdentity: true }, sharing: { enabled: false, url: null, address: null }, ai: { enabled: false, model: '' }, database: 'SQLite' })
-        if (route === '/api/telemetry/latest' && req.method === 'GET') throw fail(503, 'Live telemetry is available only from a local ShipOS installation.')
-        if (route === '/api/telemetry/history' && req.method === 'GET') return json(res, 200, [])
+        if (route === '/api/status' && req.method === 'GET') {
+          const latestRow = latestTelemetryRow()
+          const latestPacket = latestRow ? JSON.parse(latestRow.packet) : null
+          return json(res, 200, { version: '0.2.0-beta.5', mode: 'Hosted WordPress access', worldId: latestRow?.worldId || 'hosted-world', worldName: latestPacket?.worldName || worldState().name, telemetry: telemetryStatus(), sharing: { enabled: false, url: null, address: null }, ai: { enabled: false, model: '' }, database: 'SQLite' })
+        }
+        if (route === '/api/telemetry/latest' && req.method === 'GET') {
+          const row = latestTelemetryRow()
+          if (!row) throw fail(503, 'Waiting for the gaming PC telemetry relay.')
+          return json(res, 200, JSON.parse(row.packet))
+        }
+        if (route === '/api/telemetry/history' && req.method === 'GET') {
+          const row = latestTelemetryRow()
+          if (!row) return json(res, 200, [])
+          return json(res, 200, db.prepare('SELECT packet FROM relayPackets WHERE worldId=? ORDER BY id DESC LIMIT 1000').all(row.worldId).map(item => JSON.parse(item.packet)))
+        }
         if (route === '/api/ai/models' && req.method === 'GET') return json(res, 200, [])
         if (route === '/api/ai/brief' && req.method === 'POST') throw fail(503, 'Hosted AI is not enabled.')
         if (route === '/api/admin/backup' && req.method === 'GET') return json(res, 200, { format: 'shipos-hosted-backup-v1', ...worldState() }, { 'Content-Disposition': 'attachment; filename="ShipOS-hosted-backup.json"' })
         if (route === '/api/admin/restore' && req.method === 'POST') { const body = await bodyJson(req); if (body.backup?.format !== 'shipos-hosted-backup-v1') throw fail(400, 'Not a ShipOS hosted backup.'); return json(res, 200, updateState({ worldId: body.worldId, expectedRevision: body.expectedRevision, state: body.backup.state })) }
+        if (route === '/api/admin/relay-devices' && req.method === 'GET') return json(res, 200, db.prepare('SELECT id,label,createdAt,lastSeenAt FROM relayDevices ORDER BY createdAt DESC').all())
+        if (route === '/api/admin/relay-devices' && req.method === 'POST') {
+          const body = await bodyJson(req)
+          if (body.revoke) {
+            db.prepare('DELETE FROM relayDevices WHERE id=?').run(String(body.id || ''))
+            return json(res, 200, { ok: true })
+          }
+          const label = String(body.label || '').trim()
+          if (!label || label.length > 80) throw fail(400, 'Give this gaming PC a label of 1 to 80 characters.')
+          const raw = `shipos_relay_${token()}`
+          const id = `relay-${token().slice(0, 16)}`
+          const createdAt = new Date().toISOString()
+          db.prepare('INSERT INTO relayDevices(id,tokenHash,label,createdBy,createdAt,lastSeenAt) VALUES (?,?,?,?,?,NULL)').run(id, digest(raw), label, user.id, createdAt)
+          return json(res, 201, { id, label, createdAt, token: raw })
+        }
         throw fail(404, 'No such hosted API.')
       }
       if (!user) return redirect(res, '/auth/start')

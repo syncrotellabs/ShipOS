@@ -2,9 +2,9 @@
 
 A free, MIT-licensed companion for Space Engineers. **Telemetry** provides a live planetary map and concise readings; **Storytelling** keeps optional AI, campaigns, crew, contracts, finances, chronicle, communications, portraits, and ship records in a separate RP workspace.
 
-No subscription, account, internet relay, cloud AI, or game-control channel. Storytelling is experimental fiction, not observed game state.
+No subscription, paid tier, cloud AI, or game-control channel. ShipOS is local-first; an optional, explicitly enabled HTTPS telemetry relay lets the player view the gaming PC from the WordPress-authenticated hosted site. Storytelling is experimental fiction, not observed game state.
 
-The optional hosted build uses Echoboard HQ WordPress only as an identity provider: members are read-only and WordPress administrators can edit hosted records. It never receives WordPress passwords and does not relay local Space Engineers telemetry. See [Hosted ShipOS deployment](docs/HOSTED_DEPLOYMENT.md).
+The optional hosted build uses Echoboard HQ WordPress as its identity provider: members are read-only and WordPress administrators can edit hosted records and issue revocable telemetry-upload keys. It never receives WordPress passwords. Relay keys can upload telemetry only; they cannot read records or control the game. See [Hosted ShipOS deployment](docs/HOSTED_DEPLOYMENT.md).
 
 ## Windows installation
 
@@ -33,7 +33,7 @@ The service listens on loopback by default. Optional sharing binds only the sele
 
 The always-visible **Focus** dropdown lists Player first, then loaded friendly grids with `[ShipOS]` in their grid name. Use e.g. `[ShipOS] Mining Drone` in the game's grid Info tab, not a block/group name. Selection centers the map and displays that grid's readings; **Refocus** recenters after panning. Labels are enlarged with a minimum screen size for readability.
 
-Mod 2026.09.04.1 discovers grids every ten simulation seconds and samples every two. Actual owner/faction relations gate eligibility; neutral/hostile/unowned grids cannot join by adding a tag or editing map IFF. Each separate subgrid needs its own tag. Only loaded grids report, with a nearest-128 beta limit. A lost selection falls back to Player. Detailed grid readings are separate from player telemetry; story/AI context and relative-velocity tables remain player-based. See the bundled mod README for measurement definitions.
+Mod 2026.11.12.1 discovers grids every ten simulation seconds and samples every two. It also publishes the player's saved in-game GPS list as pinned, clickable map contacts. Actual owner/faction relations gate fleet eligibility; neutral/hostile/unowned grids cannot join by adding a tag or editing map IFF. Each separate subgrid needs its own tag. Only loaded grids report, with a nearest-128 beta limit. A lost selection falls back to Player. Detailed grid readings are separate from player telemetry; story/AI context and relative-velocity tables remain player-based. See the bundled mod README for measurement definitions.
 
 ## Local data and AI
 
@@ -42,6 +42,10 @@ The service watches `%APPDATA%\SpaceEngineers\Storage\ShipOSLocalTelemetry.lates
 Shared story edits use optimistic revisions: conflicts stop editing and preserve a recoverable browser draft instead of silently overwriting another console. Reset/restore makes a snapshot first. The newest 30 snapshots are kept. Original pre-beta browser records are not modified or automatically imported.
 
 AI is optional. Ollama may run on the gaming PC or another computer on the same trusted private LAN. ShipOS accepts only `127.0.0.1` or a private IPv4 address and uses the fixed endpoint `http://<AI-PC>:11434/v1/chat/completions`; public hosts and arbitrary URLs are rejected. ShipOS does not install Ollama, download a model, or contact a cloud AI provider. Prompts send context to the configured Ollama computer only when requested. Generated replies are suggestions; the player decides canon. See [Remote Ollama setup](docs/REMOTE_OLLAMA.md) to leave only ShipOS and Space Engineers on the gaming PC.
+
+## Optional hosted telemetry relay
+
+A WordPress administrator at `shipos.echoboardhq.com` can create a one-time-visible relay key. Paste that key into the local Configuration drawer to opt in. The gaming PC then makes outbound HTTPS uploads containing live telemetry, nearby contacts, and saved GPS coordinates; no inbound home-network port or router change is required. The hosted site stores a bounded 1,000-packet / 32 MB history and makes it visible to authenticated WordPress members. Disable the relay locally to erase its local key, and revoke the key on the hosted administrator page to stop future uploads. Story records and Ollama prompts are not included in telemetry uploads.
 
 ## Development and packaging
 

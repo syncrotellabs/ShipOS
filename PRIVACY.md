@@ -1,6 +1,6 @@
 # Privacy
 
-ShipOS 0.2.0-beta.5 is local-first software. It has no syncrotellabs account, advertising SDK, analytics service, subscription check, cloud relay, or automatic update service.
+ShipOS 0.2.0-beta.5 is local-first software. It has no advertising SDK, analytics service, subscription check, cloud AI, or automatic update service. The optional Echoboard telemetry relay is disabled until the player supplies a relay key and explicitly enables it.
 
 ## Data stored locally
 
@@ -16,6 +16,8 @@ Sharing is off by default. If the player enables it, ShipOS serves the selected 
 
 AI is disabled by default. If the player configures Ollama on this PC or another private-LAN computer, ShipOS sends the requested story prompt and relevant local context to that computer over unencrypted HTTP. ShipOS accepts only loopback or a private IPv4 address and never sends these prompts to syncrotellabs. Restrict the Ollama firewall rule to the trusted Private network—preferably to the gaming PC's source address—and never port-forward port `11434`. The privacy behavior of the separately installed Ollama service is controlled by that software, not ShipOS.
 
-## No collection by syncrotellabs
+## Optional hosted telemetry
 
-ShipOS does not transmit gameplay, Storytelling records, device identifiers, crash reports, or usage analytics to syncrotellabs. If a player voluntarily emails a support report, they should review and redact it before sending. Pairing links, story backups, and diagnostic logs should not be posted publicly.
+When explicitly enabled, the gaming PC sends live Space Engineers packets to `shipos.echoboardhq.com` over HTTPS. Packets can contain world and ship names, coordinates, velocity, orientation, systems status, nearby contacts, and saved GPS names/coordinates. They do not include WordPress passwords, Storytelling records, Ollama prompts, browser history, or game-control commands. The hosted service keeps at most 1,000 packets / 32 MB and exposes them to signed-in Echoboard WordPress members. A WordPress administrator can revoke an upload key; disabling locally erases the raw key from the local settings database.
+
+Outside this opt-in relay, ShipOS does not transmit gameplay, Storytelling records, device identifiers, crash reports, or usage analytics to syncrotellabs. If a player voluntarily emails a support report, they should review and redact it before sending. Relay keys, pairing links, story backups, and diagnostic logs should not be posted publicly.

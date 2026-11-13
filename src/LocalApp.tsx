@@ -9,6 +9,7 @@ type Status = {
   telemetry: { connected: boolean; stamp: string | null; error: string; stableWorldIdentity: boolean; watchFile?: string }
   sharing: { enabled: boolean; url: string | null; address: string | null; addresses?: string[] }
   ai: { enabled: boolean; model: string; host: string }
+  relay: { enabled: boolean; configured: boolean; connected: boolean; url: string; lastSuccessAt: string | null; error: string }
 }
 type Device = { id: string; label: string; role: 'editor' }
 let bootPromise: Promise<{ session: LocalSession; world: WorldState }> | undefined
@@ -36,7 +37,7 @@ export function BetaNotice() {
     <h2 id="beta-title">Your game. Your story.<br />Still a work in progress.</h2>
     <p>ShipOS is a free, open-source companion for local, single-player Space Engineers.</p>
     <p><strong>Storytelling and AI roleplay are especially experimental.</strong> Fictional messages, missions, accounts, and advice are not live game facts. ShipOS does not control your game.</p>
-    <p>Your records stay on the gaming PC. Optional tablet sharing works on your trusted local network only; optional AI can run on this PC or another computer on that private network.</p>
+    <p>Your records stay on the gaming PC by default. Optional tablet sharing works on your trusted local network; an explicitly enabled Echoboard relay can send game telemetry and GPS coordinates over HTTPS for remote viewing. Optional AI can run on this PC or another computer on your private network.</p>
     <p className="betaMuted">Back up important stories. If telemetry goes stale, the screen shows the last known reading.</p>
     <button autoFocus className="betaPrimary" onClick={() => { localStorage.setItem('shipos-beta-notice-v2', 'accepted'); dialog.current?.close(); setAccepted(true) }}>Got it — let’s play</button>
   </dialog>
@@ -66,6 +67,7 @@ function LocalSettings({ session, status, refresh }: { session: LocalSession; st
   const [devices, setDevices] = useState<Device[]>([])
   const [model, setModel] = useState(status?.ai.model || '')
   const [aiHost, setAiHost] = useState(status?.ai.host || '127.0.0.1')
+  const [relayToken, setRelayToken] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [resetText, setResetText] = useState('')
@@ -105,6 +107,17 @@ function LocalSettings({ session, status, refresh }: { session: LocalSession; st
       <label>Installed Ollama model name<input value={model} onChange={event => setModel(event.target.value)} placeholder="Exact model name installed on the AI computer" maxLength={160} /></label>
       <div className="betaActions"><button disabled={busy || !model.trim() || !aiHost.trim()} onClick={() => void act(async () => { await localApi('/api/admin/ai', { model: model.trim(), host: aiHost.trim(), enabled: true }); setMessage('Private-network AI enabled. Switch to Storytelling to use it.'); window.dispatchEvent(new Event('shipos:ai-settings')) })}>Enable AI computer</button><button disabled={busy} onClick={() => void act(async () => { await localApi('/api/admin/ai', { model: model.trim(), host: aiHost.trim() || '127.0.0.1', enabled: false }); window.dispatchEvent(new Event('shipos:ai-settings')) })}>Disable AI</button></div>
       <p className="betaMuted">Remote prompts travel as unencrypted HTTP inside your LAN. Restrict Ollama and TCP 11434 to the trusted Private network—never port-forward it.</p>
+    </section>
+    <section className="betaSettingsSection"><h3>Optional Echoboard telemetry relay</h3>
+      <p>Send live Space Engineers telemetry to <code>shipos.echoboardhq.com</code> over outbound HTTPS so a WordPress-authenticated browser on another computer can view it. No inbound port or home-network forwarding is required.</p>
+      <p><strong>This includes ship position, status, contacts, and saved GPS coordinates.</strong> Story records and Ollama prompts are not included. The relay cannot send commands to the game.</p>
+      <label>One-time relay key from the hosted administrator page<input type="password" autoComplete="off" value={relayToken} onChange={event => setRelayToken(event.target.value)} placeholder="shipos_relay_…" maxLength={80} /></label>
+      <div className="betaActions"><button disabled={busy || status?.relay.enabled || !relayToken.trim()} onClick={() => void act(async () => {
+        await localApi('/api/admin/relay', { enabled: true, token: relayToken.trim() }); setRelayToken(''); setMessage('Secure telemetry relay enabled. The next game packet will be uploaded.')
+      })}>Enable secure relay</button><button disabled={busy || !status?.relay.enabled} onClick={() => void act(async () => {
+        await localApi('/api/admin/relay', { enabled: false }); setRelayToken(''); setMessage('Telemetry relay disabled and its local key was erased.')
+      })}>Disable &amp; forget key</button></div>
+      <p className="betaMuted">Status: {status?.relay.connected ? 'Connected' : status?.relay.enabled ? status.relay.error || 'Waiting for the hosted service' : 'Off'}{status?.relay.lastSuccessAt ? ` · last upload ${new Date(status.relay.lastSuccessAt).toLocaleString()}` : ''}. Relay keys are created and revoked by a WordPress administrator at {status?.relay.url || 'https://shipos.echoboardhq.com'}.</p>
     </section>
     <section className="betaSettingsSection"><h3>Story data & recovery</h3><p>SQLite database on this PC. Each identified game world has separate story records. Reset and restore create a local snapshot first; the newest 30 snapshots are kept.</p>
       <p className="betaMuted">{status?.dataDir}</p>
@@ -146,7 +159,7 @@ export function App() {
       <ShipOSPage readOnly={false} worldId={ready.world.worldId} experience={page === 'telemetry' ? 'navigation' : 'console'}
         configuration={<LocalSettings session={ready.session} status={status} refresh={refresh} />} />
     </> : <section className="betaMission"><h1>{error ? 'Let’s reconnect ShipOS' : 'Opening your local console…'}</h1><p>{error || 'Connecting to the helper on the gaming PC.'}</p>{error && <><p>On a tablet, generate a fresh pairing QR on the PC. On the PC, launch ShipOS from its shortcut.</p><button onClick={() => window.location.reload()}>Retry</button></>}</section>}
-    <footer className="betaFooter">Free & open source · MIT · No accounts or subscriptions · Local game data only</footer>
+    <footer className="betaFooter">Free & open source · MIT · No subscriptions · Local-first with optional secure telemetry relay</footer>
     <BetaNotice />
   </>
 }

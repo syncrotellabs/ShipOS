@@ -29,6 +29,8 @@ The gaming PC must run ShipOS. Other devices need only a modern browser and the 
 
 ShipOS does not create a firewall rule. If Windows blocks LAN access, allow the bundled `node.exe` only on a trusted **Private** network. Never expose port 5174 to the internet, port-forward it, or use ShipOS on public Wi-Fi.
 
+For access away from the home LAN, the optional hosted telemetry relay requires the deployed `shipos.echoboardhq.com` service, a WordPress administrator-issued relay key, and ordinary outbound HTTPS access from the gaming PC. No inbound firewall or router rule is needed. The other computer needs only a modern browser and an Echoboard WordPress login. This relay carries telemetry/GPS data only, not Ollama prompts or local Storytelling records.
+
 ## Optional private-network AI
 
 Manual Storytelling does not require AI. The optional AI feature expects an already-installed Ollama service on the gaming PC or another computer on the same trusted private network. ShipOS accepts only `127.0.0.1` or an RFC1918 private IPv4 address and always uses port `11434`; public hosts and arbitrary URLs are rejected. The AI computer needs enough RAM or VRAM for the selected model. ShipOS does not install an AI application, download a model, or contact a cloud AI provider. See [Remote Ollama setup](docs/REMOTE_OLLAMA.md).
@@ -37,6 +39,6 @@ Manual Storytelling does not require AI. The optional AI feature expects an alre
 
 - macOS or Linux as the gaming/host PC.
 - Dedicated servers or multiplayer authority.
-- Public-internet hosting or reverse proxies.
+- Directly exposing the local ShipOS helper or Ollama to the public internet.
 - ARM Windows.
-- Remote cloud databases or relay services.
+- Third-party or self-selected telemetry relay endpoints; the beta accepts only `shipos.echoboardhq.com`.

@@ -8,14 +8,14 @@ import { createShipOsServer, validatePacket, validateState } from '../runtime/se
 
 const packet = (worldId = 'test-world-01', sequence = 1) => ({ worldId, worldName: 'Star System test', x: 1, y: 2, z: 3, sessionId: 'session-one', stamp: new Date().toISOString(), sequence, contacts: [] })
 const mission = title => ({ 'shipos-mission': { title, goal: '', startedAt: '' } })
-async function fixture(t) {
+async function fixture(t, serverOptions = {}) {
   const dataDir = await mkdtemp(path.join(tmpdir(), 'shipos-test-'))
   const staticDir = path.join(dataDir, 'static')
   await mkdir(staticDir)
   await writeFile(path.join(staticDir, 'index.html'), '<!doctype html><title>ShipOS test</title>')
   await writeFile(path.join(staticDir, 'texture.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]))
   await writeFile(path.join(staticDir, 'display.woff'), Buffer.from([0x77, 0x4f, 0x46, 0x46]))
-  const app = await createShipOsServer({ dataDir, staticDir, port: 0, watchFile: '', networkAddresses: () => ['127.0.0.2'] })
+  const app = await createShipOsServer({ dataDir, staticDir, port: 0, watchFile: '', networkAddresses: () => ['127.0.0.2'], ...serverOptions })
   let closed = false
   t.after(async () => { if (!closed) await app.close(); const resolved = path.resolve(dataDir); assert.ok(resolved.startsWith(path.resolve(tmpdir()) + path.sep) && path.basename(resolved).startsWith('shipos-test-')); await rm(resolved, { recursive: true, force: true }) })
   const session = await fetch(app.url + '/api/session')
@@ -144,4 +144,31 @@ test('AI is optional and restricted to loopback or private-LAN Ollama hosts', as
   assert.equal((await request('/api/admin/ai', { model: 'test-model:small', host: '192.168.42.20', enabled: true })).status, 200)
   const models = await (await request('/api/ai/models')).json()
   assert.equal(models[0].providerName, 'LAN 192.168.42.20')
+})
+
+test('optional hosted telemetry relay is outbound-only, authenticated, and forgets its key when disabled', async t => {
+  let upload = null
+  const relayFetch = async (url, options) => {
+    upload = { url, options }
+    return new Response(JSON.stringify({ accepted: true }), { status: 202, headers: { 'Content-Type': 'application/json' } })
+  }
+  const { app, request } = await fixture(t, { relayFetch })
+  const relayToken = `shipos_relay_${'a'.repeat(43)}`
+  assert.equal((await request('/api/admin/relay', { enabled: true, token: 'bad' })).status, 400)
+  assert.equal((await request('/api/admin/relay', { enabled: true, token: relayToken })).status, 200)
+  app.ingest(packet())
+  for (let attempt = 0; attempt < 50 && !upload; attempt++) await new Promise(resolve => setTimeout(resolve, 10))
+  assert.equal(upload.url, 'https://shipos.echoboardhq.com/api/relay/telemetry')
+  assert.equal(upload.options.method, 'POST')
+  assert.equal(upload.options.headers.Authorization, `Bearer ${relayToken}`)
+  assert.equal(upload.options.headers['X-ShipOS-Relay'], 'telemetry-v1')
+  assert.equal(JSON.parse(upload.options.body).worldId, 'test-world-01')
+  const enabled = await (await request('/api/status')).json()
+  assert.equal(enabled.relay.enabled, true)
+  assert.equal(enabled.relay.connected, true)
+  assert.equal('token' in enabled.relay, false)
+  assert.equal((await request('/api/admin/relay', { enabled: false })).status, 200)
+  const disabled = await (await request('/api/status')).json()
+  assert.equal(disabled.relay.enabled, false)
+  assert.equal(disabled.relay.configured, false)
 })

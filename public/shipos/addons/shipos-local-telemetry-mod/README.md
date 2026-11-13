@@ -4,11 +4,11 @@ The supported beta telemetry source is a local world mod; no plugin loader, clou
 
 It reads the controlled character or cockpit and writes `Storage/ShipOSLocalTelemetry.latest.json` in Space Engineers' application-data folder every two simulation seconds. Nearby contact scans run every ten simulation seconds. All loaded planets are reported with their game identity and real center/radius.
 
-Character and cockpit telemetry include position, velocity, gravity, orientation, and planetary altitude when available. The character surface altitude is derived from the closest planet surface; the cockpit value uses the game's elevation API. The 30-sample forward terrain scanner is cockpit-only, within 12 km AGL. This is terrain elevation, not thermal imagery or autopilot.
+Character and cockpit telemetry include position, velocity, gravity, orientation, and planetary altitude when available. The player's saved Space Engineers GPS fixes are included as pinned map contacts, whether or not they are currently shown on the game HUD. The character surface altitude is derived from the closest planet surface; the cockpit value uses the game's elevation API. The 30-sample forward terrain scanner is cockpit-only, within 12 km AGL. This is terrain elevation, not thermal imagery or autopilot.
 
 The mod stores `ShipOS.world-id.txt` in world storage to keep separate stories across saves. Save the world after first use. A copied save also copies this identity; remove that file from the copied world's ShipOS storage before loading it if you want an independent story.
 
-## Tagged friendly fleet (mod 2026.09.04.1)
+## Tagged friendly fleet (mod 2026.11.12.1)
 
 Add `[ShipOS]` anywhere in a **grid name** (Info tab), e.g. `[ShipOS] Mining Drone`. The tag is case-insensitive; naming a block, antenna, or group does not opt in a grid. Every separate grid/subgrid needs its own name tag.
 
